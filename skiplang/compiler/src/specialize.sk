@@ -393,14 +393,41 @@ private base class OptionStyle uses Equality, Show {
   | SentinelOptionStyle _ -> "SentinelOptionStyle"
 }
 
+mutable class SPMap<K: Orderable, V>(
+  mutable map: SortedMap<K, V> = SortedMap[],
+) {
+  readonly fun chill(): SPMap<K, V> {
+    SPMap(this.map)
+  }
+  readonly fun mclone(): mutable SPMap<K, V> {
+    mutable SPMap(this.map)
+  }
+
+  mutable fun get(k: K): V {
+    this.map[k]
+  }
+
+  mutable fun maybeGet(k: K): ?V {
+    this.map.maybeGet(k)
+  }
+
+  mutable fun set(k: K, v: V): void {
+    this.!map[k] = v;
+  }
+
+  mutable fun replace(other: readonly SPMap<K, V>): void {
+    this.!map = other.map
+  }
+}
+
 mutable class Specializer{
   mutable tick: SKStore.Tick,
 
   // For each FrontEndLazyGClass, what are all its SClass instances?
-  private mutable gclassMap: SortedMap<
+  private gclassMap: mutable SPMap<
     GClassName,
     SortedSet<SClassID>,
-  > = SortedMap[],
+  > = mutable SPMap(),
 
   // Maps (FrontEndLazyGClass, GTargs) to SClassID.
   private mutable sclassMap: SortedMap<HalfSClass, SClassID> = SortedMap[],
@@ -444,13 +471,13 @@ mutable class Specializer{
     result
   }
 
-  readonly fun gclassMapMaybeGet(key: GClassName): ?SortedSet<SClassID> {
+  mutable fun gclassMapMaybeGet(key: GClassName): ?SortedSet<SClassID> {
     result = this.gclassMap.maybeGet(key);
     result
   }
 
   mutable fun gclassMapSet(key: GClassName, value: SortedSet<SClassID>): void {
-    this.!gclassMap = this.gclassMap.set(key, value)
+    this.gclassMap.set(key, value)
   }
 
   mutable fun sclassMapGet(key: HalfSClass): SClassID {
@@ -516,7 +543,7 @@ mutable class Specializer{
   readonly fun chill(): this {
     static{
       tick => this.tick,
-      gclassMap => this.gclassMap,
+      gclassMap => this.gclassMap.chill(),
       sclassMap => this.sclassMap,
       sclasses => this.sclasses,
       funsNeeded => this.funsNeeded,
@@ -532,7 +559,7 @@ mutable class Specializer{
   readonly fun mclone(): mutable this {
     mutable static{
       tick => this.tick,
-      gclassMap => this.gclassMap,
+      gclassMap => this.gclassMap.mclone(),
       sclassMap => this.sclassMap,
       sclasses => this.sclasses,
       funsNeeded => this.funsNeeded,
@@ -547,7 +574,7 @@ mutable class Specializer{
 
   mutable fun replace(other: this): void {
     this.!tick = other.tick;
-    this.!gclassMap = other.gclassMap;
+    this.gclassMap.replace(other.gclassMap);
     this.!sclassMap = other.sclassMap;
     this.!sclasses = other.sclasses;
     this.!funsNeeded = other.funsNeeded;
