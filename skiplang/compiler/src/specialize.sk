@@ -430,7 +430,7 @@ mutable class Specializer{
   > = mutable SPMap(),
 
   // Maps (FrontEndLazyGClass, GTargs) to SClassID.
-  private mutable sclassMap: SortedMap<HalfSClass, SClassID> = SortedMap[],
+  private sclassMap: mutable SPMap<HalfSClass, SClassID> = mutable SPMap(),
 
   // Maps SClassID.id to information about that class.
   private mutable sclasses: SortedMap<SClassID, SClassInfo> = SortedMap[],
@@ -485,13 +485,13 @@ mutable class Specializer{
     result
   }
 
-  readonly fun sclassMapMaybeGet(key: HalfSClass): ?SClassID {
+  mutable fun sclassMapMaybeGet(key: HalfSClass): ?SClassID {
     result = this.sclassMap.maybeGet(key);
     result
   }
 
   mutable fun sclassMapSet(key: HalfSClass, value: SClassID): void {
-    this.!sclassMap = this.sclassMap.set(key, value);
+    this.sclassMap.set(key, value);
   }
 
   readonly fun sclassGet(key: SClassID): SClassInfo {
@@ -544,7 +544,7 @@ mutable class Specializer{
     static{
       tick => this.tick,
       gclassMap => this.gclassMap.chill(),
-      sclassMap => this.sclassMap,
+      sclassMap => this.sclassMap.chill(),
       sclasses => this.sclasses,
       funsNeeded => this.funsNeeded,
       funStack => this.funStack,
@@ -560,7 +560,7 @@ mutable class Specializer{
     mutable static{
       tick => this.tick,
       gclassMap => this.gclassMap.mclone(),
-      sclassMap => this.sclassMap,
+      sclassMap => this.sclassMap.mclone(),
       sclasses => this.sclasses,
       funsNeeded => this.funsNeeded,
       funStack => this.funStack,
@@ -575,7 +575,7 @@ mutable class Specializer{
   mutable fun replace(other: this): void {
     this.!tick = other.tick;
     this.gclassMap.replace(other.gclassMap);
-    this.!sclassMap = other.sclassMap;
+    this.sclassMap.replace(other.sclassMap);
     this.!sclasses = other.sclasses;
     this.!funsNeeded = other.funsNeeded;
     this.!funStack = other.funStack;
