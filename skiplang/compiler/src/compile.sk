@@ -192,6 +192,10 @@ fun ensureCompatibleLLVMVersion(): void {
 }
 
 class TickConfigFile(value: (Int, Config.Config)) extends SKStore.File
+class ConfigAndEnvFile(
+  conf: Config.Config,
+  env: GlobalEnv,
+) extends SKStore.File
 
 fun getOrInitializeBackend(
   context: mutable SKStore.Context,
@@ -223,12 +227,12 @@ fun getOrInitializeBackend(
     outerIst,
   );
 
-  _ = backendDir.map(
-    SKStore.SID::keyType,
-    TickConfigFile::type,
+  backendPhase1 = backendDir.map(
+    SKStore.IID::keyType,
+    ConfigAndEnvFile::type,
     context,
-    SKStore.DirName::create("/backendSink/"),
-    (context, _writer, _key, values) ~> {
+    SKStore.DirName::create("/backendPhase1/"),
+    (context, writer, key, values) ~> {
       (_, conf) = TickConfigFile::type(values.first).value;
 
       context.getGlobal("ERRORS") match {
@@ -298,7 +302,19 @@ fun getOrInitializeBackend(
         constsProj,
         defsProj,
       );
+      writer.set(key, ConfigAndEnvFile(conf, env))
+    },
+  );
 
+  _ = backendPhase1.map(
+    SKStore.IID::keyType,
+    TickConfigFile::type,
+    context,
+    SKStore.DirName::create("/backendPhase2/"),
+    (context, _writer, _key, values) ~> {
+      confAndEnv = ConfigAndEnvFile::type(values.first);
+      conf = confAndEnv.conf;
+      env = confAndEnv.env;
       !env = createOptimizedFunctions(context, env, conf);
       defs = runCompilerPhase("native/create_asm_graph", () -> {
         AsmOutput.createAsmDefGraph(env, conf)
