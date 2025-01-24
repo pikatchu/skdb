@@ -403,6 +403,10 @@ mutable class SPMap<K: Orderable, V>(
     mutable SPMap(this.map)
   }
 
+  readonly fun readonlyGet(k: K): V {
+    this.map[k]
+  }
+
   mutable fun get(k: K): V {
     this.map[k]
   }
@@ -433,7 +437,7 @@ mutable class Specializer{
   private sclassMap: mutable SPMap<HalfSClass, SClassID> = mutable SPMap(),
 
   // Maps SClassID.id to information about that class.
-  private mutable sclasses: SortedMap<SClassID, SClassInfo> = SortedMap[],
+  private sclasses: mutable SPMap<SClassID, SClassInfo> = mutable SPMap(),
 
   // Specialized functions we already know we're going to need.
   // Everything in here was pushed on funStack at some point.
@@ -495,7 +499,7 @@ mutable class Specializer{
   }
 
   readonly fun sclassGet(key: SClassID): SClassInfo {
-    result = this.sclasses[key];
+    result = this.sclasses.readonlyGet(key);
     result
   }
 
@@ -505,11 +509,11 @@ mutable class Specializer{
   }
 
   mutable fun sclassSet(key: SClassID, value: SClassInfo): void {
-    this.!sclasses = this.sclasses.set(key, value);
+    this.sclasses.set(key, value);
   }
 
   mutable fun getSClasses(): SortedMap<SClassID, SClassInfo> {
-    this.sclasses
+    this.sclasses.map
   }
 
   mutable fun funsNeededContains(key: GFunKey): Bool {
@@ -545,7 +549,7 @@ mutable class Specializer{
       tick => this.tick,
       gclassMap => this.gclassMap.chill(),
       sclassMap => this.sclassMap.chill(),
-      sclasses => this.sclasses,
+      sclasses => this.sclasses.chill(),
       funsNeeded => this.funsNeeded,
       funStack => this.funStack,
       converter => this.converter,
@@ -561,7 +565,7 @@ mutable class Specializer{
       tick => this.tick,
       gclassMap => this.gclassMap.mclone(),
       sclassMap => this.sclassMap.mclone(),
-      sclasses => this.sclasses,
+      sclasses => this.sclasses.mclone(),
       funsNeeded => this.funsNeeded,
       funStack => this.funStack,
       converter => this.converter,
@@ -576,7 +580,7 @@ mutable class Specializer{
     this.!tick = other.tick;
     this.gclassMap.replace(other.gclassMap);
     this.sclassMap.replace(other.sclassMap);
-    this.!sclasses = other.sclasses;
+    this.sclasses.replace(other.sclasses);
     this.!funsNeeded = other.funsNeeded;
     this.!funStack = other.funStack;
     this.!canCreateNewSClasses = other.canCreateNewSClasses;
@@ -589,7 +593,7 @@ mutable class Specializer{
   }
 
   readonly fun createNewSClassesMap(): SortedMap<SClassID, SClass> {
-    this.sclasses.map((_, info) -> info.sclass)
+    this.sclasses.map.map((_, info) -> info.sclass)
   }
 
   // If t is Awaitable<T>, returns Some(T), else None().
