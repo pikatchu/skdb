@@ -441,7 +441,7 @@ mutable class Specializer{
 
   // Specialized functions we already know we're going to need.
   // Everything in here was pushed on funStack at some point.
-  private mutable funsNeeded: SortedSet<GFunKey> = SortedSet[],
+  private funsNeeded: mutable SPMap<GFunKey, GFunKey> = mutable SPMap(),
 
   // Functions we still need to analyze with a new set of Targs.
   private mutable funStack: List<(GFunction, Array<Tclass>)> = List[],
@@ -517,13 +517,13 @@ mutable class Specializer{
   }
 
   mutable fun funsNeededContains(key: GFunKey): Bool {
-    result = this.funsNeeded.contains(key);
+    result = this.funsNeeded.maybeGet(key) is Some _;
     result
   }
 
   mutable fun funsNeededSet(key: GFunKey): void {
-    if (!this.funsNeeded.contains(key)) {
-      this.!funsNeeded = this.funsNeeded.set(key);
+    if (this.funsNeeded.maybeGet(key) is None()) {
+      this.funsNeeded.set(key, key);
     }
   }
 
@@ -550,7 +550,7 @@ mutable class Specializer{
       gclassMap => this.gclassMap.chill(),
       sclassMap => this.sclassMap.chill(),
       sclasses => this.sclasses.chill(),
-      funsNeeded => this.funsNeeded,
+      funsNeeded => this.funsNeeded.chill(),
       funStack => this.funStack,
       converter => this.converter,
       config => this.config,
@@ -566,7 +566,7 @@ mutable class Specializer{
       gclassMap => this.gclassMap.mclone(),
       sclassMap => this.sclassMap.mclone(),
       sclasses => this.sclasses.mclone(),
-      funsNeeded => this.funsNeeded,
+      funsNeeded => this.funsNeeded.mclone(),
       funStack => this.funStack,
       converter => this.converter,
       config => this.config,
@@ -581,7 +581,7 @@ mutable class Specializer{
     this.gclassMap.replace(other.gclassMap);
     this.sclassMap.replace(other.sclassMap);
     this.sclasses.replace(other.sclasses);
-    this.!funsNeeded = other.funsNeeded;
+    this.funsNeeded.replace(other.funsNeeded);
     this.!funStack = other.funStack;
     this.!canCreateNewSClasses = other.canCreateNewSClasses;
     this.!verifyChanged = this.verifyChanged;
@@ -1895,7 +1895,7 @@ mutable class Specializer{
     funToInsts = mutable Vector[];
 
     // First dealing with all the symbols found at initialization time
-    for (key in this.funsNeeded) {
+    for (key => _ in this.funsNeeded.map) {
       gf = this.converter.getGFunction(context, key.i0);
       funToInstsMap.getOrAdd(gf, () -> mutable Vector[]).push(key);
     };
@@ -1908,7 +1908,9 @@ mutable class Specializer{
     // Partition functions into superpositions and give them SFunctionIDs.
     // We need to assign SFunctionIDs now so that when we specialize them
     // below, Call Instrs know the SFunctionIDs to use to refer to other funs.
-    msids = UnorderedMap<GFunKey, SFunctionID>::mcreate(this.funsNeeded.size());
+    msids = UnorderedMap<GFunKey, SFunctionID>::mcreate(
+      this.funsNeeded.map.size(),
+    );
     for (gfAndInsts in funToInsts) {
       (_, insts) = gfAndInsts;
       // For now, stupidly give every unique set of parameters its own
