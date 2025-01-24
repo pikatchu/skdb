@@ -394,33 +394,43 @@ private base class OptionStyle uses Equality, Show {
 }
 
 mutable class SPMap<K: Orderable, V>(
-  mutable map: SortedMap<K, V> = SortedMap[],
+  mutable data: SortedMap<K, V> = SortedMap[],
 ) {
   readonly fun chill(): SPMap<K, V> {
-    SPMap(this.map)
+    SPMap(this.data)
   }
   readonly fun mclone(): mutable SPMap<K, V> {
-    mutable SPMap(this.map)
+    mutable SPMap(this.data)
   }
 
   readonly fun readonlyGet(k: K): V {
-    this.map[k]
+    this.data[k]
   }
 
   mutable fun get(k: K): V {
-    this.map[k]
+    this.data[k]
   }
 
   mutable fun maybeGet(k: K): ?V {
-    this.map.maybeGet(k)
+    this.data.maybeGet(k)
   }
 
   mutable fun set(k: K, v: V): void {
-    this.!map[k] = v;
+    this.!data[k] = v;
   }
 
   mutable fun replace(other: readonly SPMap<K, V>): void {
-    this.!map = other.map
+    this.!data = other.data
+  }
+  mutable fun map(f: (K, V) ~> Array<(K, V)>): mutable this {
+    result = SortedMap[];
+    for (k => v in this.data) {
+      for (kv2 in f(k, v)) {
+        (k2, v2) = kv2;
+        !result[k2] = v2
+      }
+    };
+    mutable static(result)
   }
 }
 
@@ -508,7 +518,7 @@ mutable class Specializer{
   }
 
   mutable fun getSClasses(): SortedMap<SClassID, SClassInfo> {
-    this.sclasses.map
+    this.sclasses.data
   }
 
   mutable fun funsNeededContains(key: GFunKey): Bool {
@@ -585,7 +595,7 @@ mutable class Specializer{
   }
 
   readonly fun createNewSClassesMap(): SortedMap<SClassID, SClass> {
-    this.sclasses.map.map((_, info) -> info.sclass)
+    this.sclasses.data.map((_, info) -> info.sclass)
   }
 
   // If t is Awaitable<T>, returns Some(T), else None().
@@ -1884,7 +1894,7 @@ mutable class Specializer{
     funToInsts = mutable Vector[];
 
     // First dealing with all the symbols found at initialization time
-    for (key => _ in this.funsNeeded.map) {
+    for (key => _ in this.funsNeeded.data) {
       gf = this.converter.getGFunction(context, key.i0);
       funToInstsMap.getOrAdd(gf, () -> mutable Vector[]).push(key);
     };
@@ -1898,7 +1908,7 @@ mutable class Specializer{
     // We need to assign SFunctionIDs now so that when we specialize them
     // below, Call Instrs know the SFunctionIDs to use to refer to other funs.
     msids = UnorderedMap<GFunKey, SFunctionID>::mcreate(
-      this.funsNeeded.map.size(),
+      this.funsNeeded.data.size(),
     );
     for (gfAndInsts in funToInsts) {
       (_, insts) = gfAndInsts;
