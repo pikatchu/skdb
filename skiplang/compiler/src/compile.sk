@@ -192,9 +192,9 @@ fun ensureCompatibleLLVMVersion(): void {
 }
 
 class TickConfigFile(value: (Int, Config.Config)) extends SKStore.File
-class ConfigAndEnvFile(
+class BackendPhase1File(
   conf: Config.Config,
-  env: GlobalEnv,
+  rootsIR: OuterIstToIR.RootsIR,
 ) extends SKStore.File
 
 fun getOrInitializeBackend(
@@ -229,7 +229,7 @@ fun getOrInitializeBackend(
 
   backendPhase1 = backendDir.map(
     SKStore.IID::keyType,
-    ConfigAndEnvFile::type,
+    BackendPhase1File::type,
     context,
     SKStore.DirName::create("/backendPhase1/"),
     (context, writer, key, values) ~> {
@@ -292,9 +292,8 @@ fun getOrInitializeBackend(
                 )))
       );
 
-      env = OuterIstToIR.createIR(
+      defsIR = OuterIstToIR.prepareCreateIR(
         context,
-        conf,
         shouldDisasm,
         shouldRuntimeExport,
         outerIst,
@@ -302,7 +301,7 @@ fun getOrInitializeBackend(
         constsProj,
         defsProj,
       );
-      writer.set(key, ConfigAndEnvFile(conf, env))
+      writer.set(key, BackendPhase1File(conf, defsIR))
     },
   );
 
@@ -312,9 +311,10 @@ fun getOrInitializeBackend(
     context,
     SKStore.DirName::create("/backendPhase2/"),
     (context, _writer, _key, values) ~> {
-      confAndEnv = ConfigAndEnvFile::type(values.first);
-      conf = confAndEnv.conf;
-      env = confAndEnv.env;
+      prevPhase = BackendPhase1File::type(values.first);
+      conf = prevPhase.conf;
+      roots = prevPhase.rootsIR;
+      env = OuterIstToIR.createIR(context, conf, converter, roots);
       !env = createOptimizedFunctions(context, env, conf);
       defs = runCompilerPhase("native/create_asm_graph", () -> {
         AsmOutput.createAsmDefGraph(env, conf)

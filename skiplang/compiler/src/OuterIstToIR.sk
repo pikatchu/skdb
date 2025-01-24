@@ -4953,16 +4953,23 @@ const constsArrayDir: SKStore.EHandle<
   constsArrayDirName,
 );
 
-fun createIR(
+class RootsIR{
+  consts: Array<ConstLazyGFun>,
+  funDefs: Array<OuterIst.FunDef>,
+  forceCompile: Array<LazyGFun>,
+  runtimeFunctions: Array<FrontEndLazyGFun>,
+  disasm: UnorderedSet<String>,
+}
+
+fun prepareCreateIR(
   context: mutable SKStore.Context,
-  config: Config.Config,
   shouldDisasm: (I.FunDef ~> Bool),
   shouldRuntimeExport: (I.FunDef ~> Bool),
   outerIst: I.Program,
   converter: Converter,
   constsProj: SKStore.EHandle<SKStore.IID, I.ConstDefFile>,
   funDefsProj: SKStore.EHandle<SKStore.IID, I.FunDefFile>,
-): GlobalEnv {
+): RootsIR {
   consts = converter.getConsts(context, constsProj);
   funDefs = outerIst.getFuns(context, funDefsProj);
 
@@ -5039,9 +5046,24 @@ fun createIR(
   reportMemoryStatistics("native/createIR after specialize");
 
   reportMemoryStatistics("native/createIR after force compile constant inits");
+  RootsIR{
+    consts,
+    funDefs,
+    forceCompile => forceCompile.toArray(),
+    runtimeFunctions => runtimeFunctions.toArray(),
+    disasm => disasm.chill(),
+  }
+}
 
+fun createIR(
+  context: mutable SKStore.Context,
+  config: Config.Config,
+  converter: Converter,
+  roots: RootsIR,
+): GlobalEnv {
   // Find every relevant type and function in the program.
   specializer = Specializer::make(context, config, converter);
+  forceCompile = roots.forceCompile;
 
   for (gid in forceCompile) {
     _ = specializer.requestFunction(context, gid, Array[])
@@ -5078,11 +5100,11 @@ fun createIR(
   env = GlobalEnv::make(sclasses);
   !env = specializer.partitionFunctions(
     context,
-    runtimeFunctions,
+    roots.runtimeFunctions,
     env,
     config,
-    consts,
-    disasm,
+    roots.consts,
+    roots.disasm,
   );
 
   reportMemoryStatistics("native/createIR end");
