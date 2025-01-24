@@ -424,6 +424,8 @@ mutable class SPMap<K: Orderable, V>(
   }
 }
 
+class FStackElement(GFunction, Array<Tclass>) uses Orderable
+
 mutable class Specializer{
   mutable tick: SKStore.Tick,
 
@@ -444,7 +446,7 @@ mutable class Specializer{
   private funsNeeded: mutable SPMap<GFunKey, GFunKey> = mutable SPMap(),
 
   // Functions we still need to analyze with a new set of Targs.
-  private mutable funStack: List<(GFunction, Array<Tclass>)> = List[],
+  private mutable funStack: List<FStackElement> = List[],
 
   converter: Converter,
 
@@ -531,7 +533,7 @@ mutable class Specializer{
     this.funStack.isEmpty()
   }
 
-  mutable fun funStackPop(): (GFunction, Array<Tclass>) {
+  mutable fun funStackPop(): FStackElement {
     this.funStack match {
     | List.Nil() -> invariant_violation("Cannot pop an empty funStack")
     | List.Cons(x, rl) ->
@@ -540,7 +542,7 @@ mutable class Specializer{
     }
   }
 
-  mutable fun funStackPush(elt: (GFunction, Array<Tclass>)): void {
+  mutable fun funStackPush(elt: FStackElement): void {
     this.!funStack = List.Cons(elt, this.funStack);
   }
 
@@ -765,10 +767,12 @@ mutable class Specializer{
     changed = false;
     while (!this.funStackIsEmpty()) {
       !changed = true;
-      (f, targs) = this.funStackPop();
-      this.withRegion(context, (context, specializer) ~> {
-        specializer.specializePendingFun(context, f, targs);
-      })
+      this.funStackPop() match {
+      | FStackElement(f, targs) ->
+        this.withRegion(context, (context, specializer) ~> {
+          specializer.specializePendingFun(context, f, targs);
+        })
+      }
     };
 
     changed
@@ -1829,7 +1833,7 @@ mutable class Specializer{
             `expected ${function.funInfo.tparams}, but got ${newTargs}`,
         )
       };
-      this.funStackPush((function, newTargs))
+      this.funStackPush(FStackElement(function, newTargs))
     }
   }
 
