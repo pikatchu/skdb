@@ -197,6 +197,8 @@ class BackendPhase1File(
   rootsIR: OuterIstToIR.RootsIR,
 ) extends SKStore.File
 
+class SpecializerFile(value: OuterIstToIR.Specializer) extends SKStore.File
+
 fun getOrInitializeBackend(
   context: mutable SKStore.Context,
   ptrBitSize: Int,
@@ -305,6 +307,25 @@ fun getOrInitializeBackend(
     },
   );
 
+  specializerDir = backendPhase1.map(
+    SKStore.IID::keyType,
+    SpecializerFile::type,
+    context,
+    SKStore.DirName::create("/specializer/"),
+    (context, writer, key, values) ~> {
+      prevPhase = BackendPhase1File::type(values.first);
+      conf = prevPhase.conf;
+      roots = prevPhase.rootsIR;
+      specializer = OuterIstToIR.createSpecializer(
+        context,
+        conf,
+        converter,
+        roots,
+      );
+      writer.set(key, SpecializerFile(specializer))
+    },
+  );
+
   _ = backendPhase1.map(
     SKStore.IID::keyType,
     TickConfigFile::type,
@@ -312,9 +333,10 @@ fun getOrInitializeBackend(
     SKStore.DirName::create("/backendPhase2/"),
     (context, _writer, _key, values) ~> {
       prevPhase = BackendPhase1File::type(values.first);
+      specializer = specializerDir.getArray(context, SKStore.IID(0))[0].value;
       conf = prevPhase.conf;
       roots = prevPhase.rootsIR;
-      env = OuterIstToIR.createIR(context, conf, converter, roots);
+      env = OuterIstToIR.createIR(context, conf, roots, specializer);
       !env = createOptimizedFunctions(context, env, conf);
       defs = runCompilerPhase("native/create_asm_graph", () -> {
         AsmOutput.createAsmDefGraph(env, conf)

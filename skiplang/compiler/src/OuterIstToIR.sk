@@ -5055,12 +5055,12 @@ fun prepareCreateIR(
   }
 }
 
-fun createIR(
+fun createSpecializer(
   context: mutable SKStore.Context,
   config: Config.Config,
   converter: Converter,
   roots: RootsIR,
-): GlobalEnv {
+): Specializer {
   // Find every relevant type and function in the program.
   specializer = Specializer::make(context, config, converter);
   forceCompile = roots.forceCompile;
@@ -5070,8 +5070,16 @@ fun createIR(
   };
 
   specializer.findAllFunctionsAndSClasses(context);
+  specializer.chill()
+}
 
-  reportMemoryStatistics("native/createIR after findAllFunctionsAndSClasses");
+fun createIR(
+  context: mutable SKStore.Context,
+  config: Config.Config,
+  roots: RootsIR,
+  frozenSpecializer: Specializer,
+): GlobalEnv {
+  specializer = frozenSpecializer.mclone();
 
   // Latch the sub- and supertypes.
   for (info in specializer.getSClasses()) {
