@@ -393,7 +393,7 @@ private base class OptionStyle uses Equality, Show {
   | SentinelOptionStyle _ -> "SentinelOptionStyle"
 }
 
-mutable base class SPMap<K: Orderable, V> {
+mutable base class SPMap<K: Orderable, V>{} {
   readonly fun chill(): SPMap<K, V>;
   readonly fun mclone(): mutable SPMap<K, V>;
   readonly fun readonlyGet(k: K): V;
@@ -404,14 +404,87 @@ mutable base class SPMap<K: Orderable, V> {
   readonly fun toFixed(): readonly SPMapFixed<K, V>;
 }
 
-mutable class SPMapFixed<K: Orderable, V>(
+mutable class SPMapDiff<K: Orderable, V>{
+  k2Key: K ~> SKStore.Key,
+  key2K: SKStore.Key ~> K,
+  v2File: V ~> SKStore.File,
+  file2V: SKStore.File ~> V,
+  mutable handle: SKStore.EHandle<SKStore.Key, SKStore.File>,
   mutable data: SortedMap<K, V> = SortedMap[],
-) extends SPMap<K, V> {
+} extends SPMap<K, V> {
   readonly fun chill(): SPMap<K, V> {
-    SPMapFixed(this.data)
+    SPMapDiff{
+      k2Key => this.k2Key,
+      key2K => this.key2K,
+      v2File => this.v2File,
+      file2V => this.file2V,
+      handle => this.handle,
+      data => this.data,
+    }
   }
   readonly fun mclone(): mutable SPMap<K, V> {
-    mutable SPMapFixed(this.data)
+    mutable SPMapDiff{
+      k2Key => this.k2Key,
+      key2K => this.key2K,
+      v2File => this.v2File,
+      file2V => this.file2V,
+      handle => this.handle,
+      data => this.data,
+    }
+  }
+
+  readonly fun readonlyGet(_k: K): V {
+    invariant_violation("Cannot call readonlyGet from SPMapDiff")
+  }
+
+  mutable fun get(context: mutable SKStore.Context, k: K): V {
+    this.data.maybeGet(k) match {
+    | None() ->
+      arr = this.handle.getArray(context, this.k2Key(k));
+      if (arr.size() == 0) invariant_violation("Not found") else {
+        this.file2V(arr[0])
+      }
+    | Some(x) -> x
+    }
+  }
+
+  mutable fun maybeGet(context: mutable SKStore.Context, k: K): ?V {
+    this.data.maybeGet(k) match {
+    | None() ->
+      arr = this.handle.getArray(context, this.k2Key(k));
+      if (arr.size() == 0) None() else {
+        Some(this.file2V(arr[0]))
+      }
+    | x @ Some(_) -> x
+    }
+  }
+
+  mutable fun set(k: K, v: V): void {
+    this.!data[k] = v;
+  }
+
+  readonly fun toFixed(): readonly SPMapFixed<K, V> {
+    invariant_violation("Cannot vall toFixed from SPMapDiff")
+  }
+
+  mutable fun replace(other: readonly SPMap<K, V>): void {
+    other match {
+    | SPMapFixed _ -> invariant_violation("Cannot replace")
+    | o @ SPMapDiff _ ->
+      this.!handle = o.handle;
+      this.!data = o.data
+    }
+  }
+}
+
+mutable class SPMapFixed<K: Orderable, V>{
+  mutable data: SortedMap<K, V> = SortedMap[],
+} extends SPMap<K, V> {
+  readonly fun chill(): SPMap<K, V> {
+    SPMapFixed{data => this.data}
+  }
+  readonly fun mclone(): mutable SPMap<K, V> {
+    mutable SPMapFixed{data => this.data}
   }
 
   readonly fun readonlyGet(k: K): V {
@@ -477,17 +550,17 @@ mutable class Specializer{
   private gclassMap: mutable SPMap<
     GClassName,
     SortedSet<SClassID>,
-  > = mutable SPMapFixed(),
+  > = mutable SPMapFixed{},
 
   // Maps (FrontEndLazyGClass, GTargs) to SClassID.
-  private sclassMap: mutable SPMap<HalfSClass, SClassID> = mutable SPMapFixed(),
+  private sclassMap: mutable SPMap<HalfSClass, SClassID> = mutable SPMapFixed{},
 
   // Maps SClassID.id to information about that class.
-  private sclasses: mutable SPMap<SClassID, SClassInfo> = mutable SPMapFixed(),
+  private sclasses: mutable SPMap<SClassID, SClassInfo> = mutable SPMapFixed{},
 
   // Specialized functions we already know we're going to need.
   // Everything in here was pushed on funStack at some point.
-  private funsNeeded: mutable SPMap<GFunKey, GFunKey> = mutable SPMapFixed(),
+  private funsNeeded: mutable SPMap<GFunKey, GFunKey> = mutable SPMapFixed{},
 
   // Functions we still need to analyze with a new set of Targs.
   private mutable funStack: List<FStackElement> = List[],
