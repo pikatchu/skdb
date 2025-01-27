@@ -401,7 +401,6 @@ mutable base class SPMap<K: Orderable, V> {
   mutable fun maybeGet(context: mutable SKStore.Context, k: K): ?V;
   mutable fun set(k: K, v: V): void;
   mutable fun replace(other: readonly SPMap<K, V>): void;
-  mutable fun map(f: (K, V) ~> Array<(K, V)>): mutable this;
   readonly fun toFixed(): readonly SPMapFixed<K, V>;
 }
 
@@ -437,16 +436,6 @@ mutable class SPMapFixed<K: Orderable, V>(
 
   mutable fun replace(other: readonly SPMap<K, V>): void {
     this.!data = other.toFixed().data;
-  }
-  mutable fun map(f: (K, V) ~> Array<(K, V)>): mutable this {
-    result = SortedMap[];
-    for (k => v in this.data) {
-      for (kv2 in f(k, v)) {
-        (k2, v2) = kv2;
-        !result[k2] = v2
-      }
-    };
-    mutable static(result)
   }
 }
 
