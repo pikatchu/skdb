@@ -617,11 +617,6 @@ mutable class Specializer{
     result
   }
 
-  mutable fun sclassMaybeGet(key: SClassID): ?SClassInfo {
-    result = this.sclasses.maybeGet(this.context, key);
-    result
-  }
-
   mutable fun sclassSet(key: SClassID, value: SClassInfo): void {
     this.sclasses.set(key, value);
   }
