@@ -397,8 +397,8 @@ mutable base class SPMap<K: Orderable, V> {
   readonly fun chill(): SPMap<K, V>;
   readonly fun mclone(): mutable SPMap<K, V>;
   readonly fun readonlyGet(k: K): V;
-  mutable fun get(k: K): V;
-  mutable fun maybeGet(k: K): ?V;
+  mutable fun get(context: mutable SKStore.Context, k: K): V;
+  mutable fun maybeGet(context: mutable SKStore.Context, k: K): ?V;
   mutable fun set(k: K, v: V): void;
   mutable fun replace(other: readonly SPMap<K, V>): void;
   mutable fun map(f: (K, V) ~> Array<(K, V)>): mutable this;
@@ -419,11 +419,11 @@ mutable class SPMapFixed<K: Orderable, V>(
     this.data[k]
   }
 
-  mutable fun get(k: K): V {
+  mutable fun get(_context: mutable SKStore.Context, k: K): V {
     this.data[k]
   }
 
-  mutable fun maybeGet(k: K): ?V {
+  mutable fun maybeGet(_context: mutable SKStore.Context, k: K): ?V {
     this.data.maybeGet(k)
   }
 
@@ -523,12 +523,12 @@ mutable class Specializer{
   }
 
   mutable fun gclassMapGet(key: GClassName): SortedSet<SClassID> {
-    result = this.gclassMap[key];
+    result = this.gclassMap.get(this.context, key);
     result
   }
 
   mutable fun gclassMapMaybeGet(key: GClassName): ?SortedSet<SClassID> {
-    result = this.gclassMap.maybeGet(key);
+    result = this.gclassMap.maybeGet(this.context, key);
     result
   }
 
@@ -537,12 +537,12 @@ mutable class Specializer{
   }
 
   mutable fun sclassMapGet(key: HalfSClass): SClassID {
-    result = this.sclassMap[key];
+    result = this.sclassMap.get(this.context, key);
     result
   }
 
   mutable fun sclassMapMaybeGet(key: HalfSClass): ?SClassID {
-    result = this.sclassMap.maybeGet(key);
+    result = this.sclassMap.maybeGet(this.context, key);
     result
   }
 
@@ -556,7 +556,7 @@ mutable class Specializer{
   }
 
   mutable fun sclassMaybeGet(key: SClassID): ?SClassInfo {
-    result = this.sclasses.maybeGet(key);
+    result = this.sclasses.maybeGet(this.context, key);
     result
   }
 
@@ -569,12 +569,12 @@ mutable class Specializer{
   }
 
   mutable fun funsNeededContains(key: GFunKey): Bool {
-    result = this.funsNeeded.maybeGet(key) is Some _;
+    result = this.funsNeeded.maybeGet(this.context, key) is Some _;
     result
   }
 
   mutable fun funsNeededSet(key: GFunKey): void {
-    if (this.funsNeeded.maybeGet(key) is None()) {
+    if (this.funsNeeded.maybeGet(this.context, key) is None()) {
       this.funsNeeded.set(key, key);
     }
   }
