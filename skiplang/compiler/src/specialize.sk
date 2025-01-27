@@ -393,14 +393,26 @@ private base class OptionStyle uses Equality, Show {
   | SentinelOptionStyle _ -> "SentinelOptionStyle"
 }
 
-mutable class SPMap<K: Orderable, V>(
+mutable base class SPMap<K: Orderable, V> {
+  readonly fun chill(): SPMap<K, V>;
+  readonly fun mclone(): mutable SPMap<K, V>;
+  readonly fun readonlyGet(k: K): V;
+  mutable fun get(k: K): V;
+  mutable fun maybeGet(k: K): ?V;
+  mutable fun set(k: K, v: V): void;
+  mutable fun replace(other: readonly SPMap<K, V>): void;
+  mutable fun map(f: (K, V) ~> Array<(K, V)>): mutable this;
+  readonly fun toFixed(): readonly SPMapFixed<K, V>;
+}
+
+mutable class SPMapFixed<K: Orderable, V>(
   mutable data: SortedMap<K, V> = SortedMap[],
-) {
+) extends SPMap<K, V> {
   readonly fun chill(): SPMap<K, V> {
-    SPMap(this.data)
+    SPMapFixed(this.data)
   }
   readonly fun mclone(): mutable SPMap<K, V> {
-    mutable SPMap(this.data)
+    mutable SPMapFixed(this.data)
   }
 
   readonly fun readonlyGet(k: K): V {
@@ -419,8 +431,12 @@ mutable class SPMap<K: Orderable, V>(
     this.!data[k] = v;
   }
 
+  readonly fun toFixed(): readonly SPMapFixed<K, V> {
+    this
+  }
+
   mutable fun replace(other: readonly SPMap<K, V>): void {
-    this.!data = other.data
+    this.!data = other.toFixed().data;
   }
   mutable fun map(f: (K, V) ~> Array<(K, V)>): mutable this {
     result = SortedMap[];
@@ -434,24 +450,24 @@ mutable class SPMap<K: Orderable, V>(
   }
 }
 
-class FStackElement(GFunction, Array<Tclass>) uses Orderable
+class FStackElement(GFunction, Array<Tclass>) extends SKStore.Key, SKStore.File
 
 mutable class Specializer{
   // For each FrontEndLazyGClass, what are all its SClass instances?
   private gclassMap: mutable SPMap<
     GClassName,
     SortedSet<SClassID>,
-  > = mutable SPMap(),
+  > = mutable SPMapFixed(),
 
   // Maps (FrontEndLazyGClass, GTargs) to SClassID.
-  private sclassMap: mutable SPMap<HalfSClass, SClassID> = mutable SPMap(),
+  private sclassMap: mutable SPMap<HalfSClass, SClassID> = mutable SPMapFixed(),
 
   // Maps SClassID.id to information about that class.
-  private sclasses: mutable SPMap<SClassID, SClassInfo> = mutable SPMap(),
+  private sclasses: mutable SPMap<SClassID, SClassInfo> = mutable SPMapFixed(),
 
   // Specialized functions we already know we're going to need.
   // Everything in here was pushed on funStack at some point.
-  private funsNeeded: mutable SPMap<GFunKey, GFunKey> = mutable SPMap(),
+  private funsNeeded: mutable SPMap<GFunKey, GFunKey> = mutable SPMapFixed(),
 
   // Functions we still need to analyze with a new set of Targs.
   private mutable funStack: List<FStackElement> = List[],
@@ -518,7 +534,7 @@ mutable class Specializer{
   }
 
   mutable fun getSClasses(): SortedMap<SClassID, SClassInfo> {
-    this.sclasses.data
+    this.sclasses.toFixed().data
   }
 
   mutable fun funsNeededContains(key: GFunKey): Bool {
@@ -595,7 +611,7 @@ mutable class Specializer{
   }
 
   readonly fun createNewSClassesMap(): SortedMap<SClassID, SClass> {
-    this.sclasses.data.map((_, info) -> info.sclass)
+    this.sclasses.toFixed().data.map((_, info) -> info.sclass)
   }
 
   // If t is Awaitable<T>, returns Some(T), else None().
@@ -1894,7 +1910,7 @@ mutable class Specializer{
     funToInsts = mutable Vector[];
 
     // First dealing with all the symbols found at initialization time
-    for (key => _ in this.funsNeeded.data) {
+    for (key => _ in this.funsNeeded.toFixed().data) {
       gf = this.converter.getGFunction(context, key.i0);
       funToInstsMap.getOrAdd(gf, () -> mutable Vector[]).push(key);
     };
@@ -1908,7 +1924,7 @@ mutable class Specializer{
     // We need to assign SFunctionIDs now so that when we specialize them
     // below, Call Instrs know the SFunctionIDs to use to refer to other funs.
     msids = UnorderedMap<GFunKey, SFunctionID>::mcreate(
-      this.funsNeeded.data.size(),
+      this.funsNeeded.toFixed().data.size(),
     );
     for (gfAndInsts in funToInsts) {
       (_, insts) = gfAndInsts;

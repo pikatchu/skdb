@@ -307,6 +307,22 @@ fun getOrInitializeBackend(
     },
   );
 
+  _specializerRootsDir = backendPhase1.map(
+    OuterIstToIR.FStackElement::keyType,
+    OuterIstToIR.FStackElement::type,
+    context,
+    SKStore.DirName::create("/specializer/roots/"),
+    (context, writer, _, values) ~> {
+      prevPhase = BackendPhase1File::type(values.first);
+      roots = prevPhase.rootsIR;
+      for (root in roots.forceCompile) {
+        function = converter.getGFunction(context, root);
+        elt = OuterIstToIR.FStackElement(function, Array[]);
+        writer.set(elt, elt);
+      }
+    },
+  );
+
   specializerDir = backendPhase1.map(
     SKStore.IID::keyType,
     SpecializerFile::type,
