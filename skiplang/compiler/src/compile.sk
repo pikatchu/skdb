@@ -309,9 +309,9 @@ fun getOrInitializeBackend(
     },
   );
 
-  _specializerRootsDir = backendPhase1.map(
-    OuterIstToIR.FStackElement::keyType,
-    OuterIstToIR.FStackElement::type,
+  specializerRootsDir = backendPhase1.map(
+    x ~> x,
+    x ~> x,
     context,
     SKStore.DirName::create("/specializer/roots/"),
     (context, writer, _, values) ~> {
@@ -339,6 +339,7 @@ fun getOrInitializeBackend(
         conf,
         converter,
         roots,
+        specializerRootsDir,
       );
       writer.set(key, SpecializerFile(specializer))
     },
