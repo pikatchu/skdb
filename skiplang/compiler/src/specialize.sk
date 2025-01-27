@@ -613,7 +613,15 @@ mutable class Specializer{
   }
 
   readonly fun sclassGet(key: SClassID): SClassInfo {
+    if (this.canCreateNewSClasses) {
+      invariant_violation("sclassGet should not be called in this phase");
+    };
     result = this.sclasses.readonlyGet(key);
+    result
+  }
+
+  mutable fun trackedSClassGet(key: SClassID): SClassInfo {
+    result = this.sclasses.get(this.context, key);
     result
   }
 
@@ -710,7 +718,7 @@ mutable class Specializer{
   }
 
   mutable fun getTargs(tc: Tclass): Array<Tclass> {
-    this.sclassGet(tc.sclassID).sclass.superposition.id
+    this.trackedSClassGet(tc.sclassID).sclass.superposition.id
   }
 
   // Determine the actual targs to be passed to a method call.
@@ -731,7 +739,7 @@ mutable class Specializer{
 
     obj = call.args[0];
     objType = this.getTclass3(context, obj.getType(), tparamEnv);
-    objTypeInfo = this.sclassGet(objType.sclassID);
+    objTypeInfo = this.trackedSClassGet(objType.sclassID);
     objTypeGClass = objTypeInfo.gclass;
 
     gtargs = call.targs;
@@ -921,7 +929,7 @@ mutable class Specializer{
           // call, so we need to force that method to get compiled.
           valType = this.getTclass3(context, value.getType(), tparamEnv);
 
-          if (this.sclassGet(valType.sclassID).optionStyle.isSome()) {
+          if (this.trackedSClassGet(valType.sclassID).optionStyle.isSome()) {
             this.requestMethod(context, "isSome", valType, Array[])
           }
 
@@ -996,7 +1004,7 @@ mutable class Specializer{
       // Minor optimization: reuse this table each time through the loop.
       smap = mutable UnorderedMap[];
 
-      info = this.sclassGet(example.id);
+      info = this.trackedSClassGet(example.id);
 
       NamedInner(
         info.unscalarizedFields.map(exampleField -> {
@@ -1008,7 +1016,7 @@ mutable class Specializer{
 
               for (caller in callers) {
                 tc = typ.typeInSuperposition(caller);
-                subinfo = this.sclassGet(tc.sclassID);
+                subinfo = this.trackedSClassGet(tc.sclassID);
                 field = subinfo.getUnscalarizedField(fname, pos);
 
                 fieldType = if (tc.isDeepFrozen()) {
@@ -1137,10 +1145,10 @@ mutable class Specializer{
       !sub = sub.setSuperTypes(this, sub.supertypes.set(super.sclass.id));
 
       for (t in super.supertypes) {
-        (_, !sub) = this.inherit(context, this.sclassGet(t), sub);
+        (_, !sub) = this.inherit(context, this.trackedSClassGet(t), sub);
       };
       for (t in sub.subtypes) {
-        (!super, _) = this.inherit(context, super, this.sclassGet(t))
+        (!super, _) = this.inherit(context, super, this.trackedSClassGet(t))
       };
 
       // Track all methods callable on concrete classes (by casting to some
@@ -1263,7 +1271,7 @@ mutable class Specializer{
     | (Mutable(), _)
     | (Readonly(), DeepFrozen())
     | (DeepFrozen(), DeepFrozen()) ->
-      this.sclassGet(t1.sclassID).supertypes.contains(t2.sclassID)
+      this.trackedSClassGet(t1.sclassID).supertypes.contains(t2.sclassID)
     | _ -> false
     }
   }
@@ -1295,7 +1303,9 @@ mutable class Specializer{
   mutable fun canInstantiate(t: Type): Bool {
     // TODO: If an SClass in a KBase with no concrete subclasses, we can
     // say it's not instantiable.
-    !t.forEachTclass(tc -> !this.sclassGet(tc.sclassID).sclass.canInstantiate)
+    !t.forEachTclass(tc ->
+      !this.trackedSClassGet(tc.sclassID).sclass.canInstantiate
+    )
   }
 
   // Create a type for Call Instrs that return multiple values. To regularize
@@ -1362,7 +1372,7 @@ mutable class Specializer{
   // Helper for getOptionStyle2(): takes the T in Option<T>, which must
   // not be parametric, and returns the style to use.
   private mutable fun getOptionStyleHelper2(tc: Tclass, pos: Pos): OptionStyle {
-    info = this.sclassGet(tc.sclassID);
+    info = this.trackedSClassGet(tc.sclassID);
     info.optionStyle match {
     | Some(FlagOptionStyle _) ->
       // Option<Option<T>> etc. where the inner Option already needed
@@ -1432,7 +1442,7 @@ mutable class Specializer{
   ): HalfClass {
     (gid, targ) = hc.generic match {
     | FrontEndLazyGClass("Base") ->
-      tArgInfo = this.sclassGet(hc.targs[0].sclassID);
+      tArgInfo = this.trackedSClassGet(hc.targs[0].sclassID);
       g = tArgInfo.lazyGClass;
 
       lg = if (hc.literalType) {
@@ -1444,7 +1454,7 @@ mutable class Specializer{
 
     | FrontEndLazyGClass("Class")
     | FrontEndLazyGClass("Concrete") ->
-      tArgInfo = this.sclassGet(hc.targs[0].sclassID);
+      tArgInfo = this.trackedSClassGet(hc.targs[0].sclassID);
       g = tArgInfo.lazyGClass;
 
       lg = tArgInfo.sclass.kind match {
@@ -1514,7 +1524,7 @@ mutable class Specializer{
     hsc = HalfSClass(hc.generic, targs);
 
     this.sclassMapMaybeGet(hsc) match {
-    | Some(sc) -> this.sclassGet(sc)
+    | Some(sc) -> this.trackedSClassGet(sc)
     | None() ->
       this.getOptionStyle2(hc, this.pos) match {
       | None() -> void
@@ -1670,7 +1680,7 @@ mutable class Specializer{
         super = this.getTclass3(context, ta, tparamEnv);
         (_, !info) = this.inherit(
           context,
-          this.sclassGet(super.sclassID),
+          this.trackedSClassGet(super.sclassID),
           info,
         );
       };
@@ -1697,7 +1707,7 @@ mutable class Specializer{
       if (hasAnyVariance) {
         for (otherID in this.gclassMapGet(hc.generic.name())) {
           if (otherID != sid) {
-            other = this.sclassGet(otherID);
+            other = this.trackedSClassGet(otherID);
 
             // Is 'newClass' a supertype of 'other'?
             isSuperType = true;
@@ -1798,7 +1808,7 @@ mutable class Specializer{
       | None() -> sc.pos.die(`No source entry for method ${name} on ${sc}`)
       };
       info.extends_.maybeGet(source).map(superID -> {
-        scinfo = this.sclassGet(superID);
+        scinfo = this.trackedSClassGet(superID);
         (scinfo.sclass.id, scinfo.gclass.methods[name])
       })
     }
@@ -1826,7 +1836,7 @@ mutable class Specializer{
     if (requestImpl) {
       gmethod.function match {
       | Some(getLazyGFun) ->
-        hostInfo = this.sclassGet(hostID);
+        hostInfo = this.trackedSClassGet(hostID);
         host = hostInfo.sclass;
         this.requestFunction(
           context,
@@ -1869,7 +1879,7 @@ mutable class Specializer{
         !receiver = this.addMethod(context, receiver, m, true)
       } else {
         for (subID in receiver.subtypes) {
-          info = this.sclassGet(subID);
+          info = this.trackedSClassGet(subID);
           if (!info.methods.containsKey(m)) {
             _ = this.addMethod(context, info, m, info.sclass.kind.isFinal())
           }
@@ -1885,7 +1895,7 @@ mutable class Specializer{
     objType: Tclass,
     targs: Array<Tclass>,
   ): void {
-    info = this.sclassGet(objType.sclassID);
+    info = this.trackedSClassGet(objType.sclassID);
     sposn = MethodSuperpositionID(targs);
     _ = this.noteCalledMethod(context, info, MethodKey(method, sposn))
   }
@@ -2095,7 +2105,7 @@ mutable class Specializer{
     if (!info.methods.isEmpty()) {
       newMethods = UnorderedMap::mcreate(info.methods.size());
       for (mkey => hostID in info.methods) {
-        host = this.sclassGet(hostID).sclass;
+        host = this.trackedSClassGet(hostID).sclass;
         methodFunName = FrontEndLazyGFun{
           frontEndName => host.gclassName.id + "::" + mkey.name,
         };
@@ -2463,7 +2473,7 @@ mutable class FunSpecializer{
     s = this.specializer;
     result = (None() : ?OptionStyle);
     this.typemaps.eachWithIndex((i, tm) -> {
-      optionStyle = s.sclassGet(
+      optionStyle = s.trackedSClassGet(
         s.getTclass3(context, gt, tm).sclassID,
       ).optionStyle;
       if (i == 0) {
@@ -2827,11 +2837,11 @@ mutable class FunSpecializer{
     msmap = this.getMethodSMap(targs);
     for (c in this.callers) {
       tc = objType.typeInSuperposition(c);
-      info = this.specializer.sclassGet(tc.sclassID);
+      info = this.specializer.trackedSClassGet(tc.sclassID);
       msposn = msmap[c];
       methodKey = MethodKey(method, msposn);
       sclassID = info.methods[methodKey];
-      hostInfo = this.specializer.sclassGet(sclassID);
+      hostInfo = this.specializer.trackedSClassGet(sclassID);
       hostName match {
       | Some(name) ->
         if (hostInfo.sclass.gclassName != name) {
@@ -2967,7 +2977,7 @@ mutable class FunSpecializer{
   ): void {
     thisType = this.specializeType(context, args[0].getType());
     sc = this.specializer.exampleSClass(thisType);
-    style = this.specializer.sclassGet(sc.id).optionStyle match {
+    style = this.specializer.trackedSClassGet(sc.id).optionStyle match {
     | Some(s @ SentinelOptionStyle _) -> s
     | _ -> pos.die(`Expected SentinelOptionStyle for ${thisType}`)
     };
@@ -3357,7 +3367,9 @@ mutable class FunSpecializer{
               this.emitObject{args, typ, pos, prettyName => o.prettyName}.id,
             )
           } else {
-            fields = this.specializer.sclassGet(sc.id).unscalarizedFields;
+            fields = this.specializer.trackedSClassGet(
+              sc.id,
+            ).unscalarizedFields;
             if (fields.size() != o.args.size()) {
               o.die(
                 "Arg count mismatch for " +
