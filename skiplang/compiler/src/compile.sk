@@ -197,7 +197,9 @@ class BackendPhase1File(
   rootsIR: OuterIstToIR.RootsIR,
 ) extends SKStore.File
 
-class SpecializerFile(value: OuterIstToIR.Specializer) extends SKStore.File
+class SpecializerFile(
+  value: OuterIstToIR.SpecializerState,
+) extends SKStore.File
 
 fun getOrInitializeBackend(
   context: mutable SKStore.Context,

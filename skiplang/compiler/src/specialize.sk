@@ -452,7 +452,38 @@ mutable class SPMapFixed<K: Orderable, V>(
 
 class FStackElement(GFunction, Array<Tclass>) extends SKStore.Key, SKStore.File
 
+class SpecializerState{
+  gclassMap: SPMap<GClassName, SortedSet<SClassID>>,
+  sclassMap: SPMap<HalfSClass, SClassID>,
+  sclasses: SPMap<SClassID, SClassInfo>,
+  funsNeeded: SPMap<GFunKey, GFunKey>,
+  funStack: List<FStackElement>,
+  converter: Converter,
+  config: Config.Config,
+  canCreateNewSClasses: Bool,
+  verifyChanged: Bool,
+  pos: Pos,
+} {
+  fun mclone(context: mutable SKStore.Context): mutable Specializer {
+    mutable Specializer{
+      context => context,
+      gclassMap => this.gclassMap.mclone(),
+      sclassMap => this.sclassMap.mclone(),
+      sclasses => this.sclasses.mclone(),
+      funsNeeded => this.funsNeeded.mclone(),
+      funStack => this.funStack,
+      converter => this.converter,
+      config => this.config,
+      canCreateNewSClasses => this.canCreateNewSClasses,
+      verifyChanged => this.verifyChanged,
+      pos => this.pos,
+    }
+  }
+}
+
 mutable class Specializer{
+  context: mutable SKStore.Context,
+
   // For each FrontEndLazyGClass, what are all its SClass instances?
   private gclassMap: mutable SPMap<
     GClassName,
@@ -484,11 +515,11 @@ mutable class Specializer{
   mutable pos: Pos,
 } extends ClassLookupEnv {
   static fun make(
-    _context: mutable SKStore.Context,
+    context: mutable SKStore.Context,
     config: Config.Config,
     converter: Converter,
   ): mutable Specializer {
-    mutable Specializer{converter, config, pos => FileRange.builtin}
+    mutable Specializer{context, converter, config, pos => FileRange.builtin}
   }
 
   mutable fun gclassMapGet(key: GClassName): SortedSet<SClassID> {
@@ -565,8 +596,8 @@ mutable class Specializer{
     this.!funStack = List.Cons(elt, this.funStack);
   }
 
-  readonly fun chill(): this {
-    static{
+  readonly fun chill(): SpecializerState {
+    SpecializerState{
       gclassMap => this.gclassMap.chill(),
       sclassMap => this.sclassMap.chill(),
       sclasses => this.sclasses.chill(),
@@ -580,22 +611,7 @@ mutable class Specializer{
     }
   }
 
-  readonly fun mclone(): mutable this {
-    mutable static{
-      gclassMap => this.gclassMap.mclone(),
-      sclassMap => this.sclassMap.mclone(),
-      sclasses => this.sclasses.mclone(),
-      funsNeeded => this.funsNeeded.mclone(),
-      funStack => this.funStack,
-      converter => this.converter,
-      config => this.config,
-      canCreateNewSClasses => this.canCreateNewSClasses,
-      verifyChanged => this.verifyChanged,
-      pos => this.pos,
-    }
-  }
-
-  mutable fun replace(other: this): void {
+  mutable fun replace(other: SpecializerState): void {
     this.gclassMap.replace(other.gclassMap);
     this.sclassMap.replace(other.sclassMap);
     this.sclasses.replace(other.sclasses);
@@ -763,7 +779,7 @@ mutable class Specializer{
   ): T {
     frozenSpecializer = this.chill();
     (newSpecializer, result) = SKStore.withRegion(context, (_, context) ~> {
-      specializer = frozenSpecializer.mclone();
+      specializer = frozenSpecializer.mclone(context);
       result = f(context, specializer);
       (specializer.chill(), result)
     });
