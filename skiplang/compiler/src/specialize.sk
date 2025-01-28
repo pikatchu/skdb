@@ -713,10 +713,43 @@ mutable class Specializer{
     }
   }
 
-  mutable fun toFixed(
-    context: mutable SKStore.Context,
-    handleName: SKStore.DirName,
-  ): void {
+  mutable fun toFixed(context: mutable SKStore.Context): void {
+    handleName = this.gclassMap match {
+    | SPMapDiff{handle} -> handle.dirName
+    | _ ->
+      invariant_violation("Cannot call toFixed on this kind of specializer")
+    };
+
+    this.sclassMap match {
+    | SPMapDiff{handle} ->
+      invariant(
+        handleName == handle.dirName,
+        "Handle names in specializer must all be the same",
+      )
+    | _ ->
+      invariant_violation("Cannot call toFixed on this kind of specializer")
+    };
+
+    this.sclasses match {
+    | SPMapDiff{handle} ->
+      invariant(
+        handleName == handle.dirName,
+        "Handle names in specializer must all be the same",
+      )
+    | _ ->
+      invariant_violation("Cannot call toFixed on this kind of specializer")
+    };
+
+    this.funsNeeded match {
+    | SPMapDiff{handle} ->
+      invariant(
+        handleName == handle.dirName,
+        "Handle names in specializer must all be the same",
+      )
+    | _ ->
+      invariant_violation("Cannot call toFixed on this kind of specializer")
+    };
+
     gclassMap = SortedMap[];
     sclassMap = SortedMap[];
     sclasses = SortedMap[];
