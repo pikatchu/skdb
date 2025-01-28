@@ -343,7 +343,7 @@ fun getOrInitializeBackend(
     },
   );
 
-  _specializerKeysDir = specializerRootsDir.map(
+  specializerKeysDir = specializerRootsDir.map(
     x ~> x,
     OuterIstToIR.FStackElement::type,
     context,
@@ -368,6 +368,58 @@ fun getOrInitializeBackend(
       for (key in specializer.getDiff()) {
         writer.set(key, fstackElement);
       }
+    },
+  );
+
+  specializerArrows = specializerKeysDir.map(
+    OuterIstToIR.FStackElement::keyType,
+    OuterIstToIR.FStackElement::type,
+    context,
+    SKStore.DirName::create("/specializer/arrows/"),
+    (_context, writer, _key, valueIter) ~> {
+      values = valueIter.collect(Array);
+      for (value in values) {
+        writer.setArray(value, values)
+      }
+    },
+  );
+
+  specializerGetDep = SKStore.LHandle::create(
+    OuterIstToIR.FStackElement::keyType,
+    OuterIstToIR.FStackElement::type,
+    context,
+    SKStore.DirName::create("/specializer/deps/"),
+    (context, self, key) ~> {
+      keyDeps = specializerArrows.getArray(context, key);
+      result = mutable Vector[];
+      for (dep in keyDeps) {
+        result.extend(self.getArrayWithOptions(context, dep, false));
+      };
+      result.toArray()
+    },
+  );
+
+  _specializerReduced = specializerArrows.map(
+    x ~> x,
+    x ~> x,
+    context,
+    SKStore.DirName::create("/specializer/reduced/"),
+    (context, writer, key, _values) ~> {
+      deps = specializerGetDep.getArrayWithOptions(context, key, false);
+      for (dep in deps) {
+        if (dep < key) return void
+      };
+      specializerInit = specializerInitDir.getArray(context, SKStore.IID(0))[
+        0,
+      ].value;
+
+      !specializerInit.funStack = List::createFromItems(deps);
+      specializer = OuterIstToIR.specializerReduce(
+        context,
+        specializerInit,
+        Array[],
+      );
+      specializer.writeDiff(writer)
     },
   );
 

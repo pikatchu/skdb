@@ -802,6 +802,23 @@ mutable class Specializer{
     result
   }
 
+  readonly fun writeDiff(
+    writer: mutable SKStore.TWriter<SKStore.Key, SKStore.File>,
+  ): void {
+    for (k => v in this.gclassMap.getDiff()) {
+      writer.set(GClassNameKey(k), SortedSetSClassIDFile(v));
+    };
+    for (k => v in this.sclassMap.getDiff()) {
+      writer.set(HalfSClassKey(k), SClassIDFile(v));
+    };
+    for (k => v in this.sclasses.getDiff()) {
+      writer.set(SClassIDKey(k), SClassInfoFile(v));
+    };
+    for (k => v in this.funsNeeded.getDiff()) {
+      writer.set(GFunKeyKey(k), GFunKeyFile(v));
+    };
+  }
+
   mutable fun gclassMapGet(key: GClassName): SortedSet<SClassID> {
     result = this.gclassMap.get(this.context, key);
     result
