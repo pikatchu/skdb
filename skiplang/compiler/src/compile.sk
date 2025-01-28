@@ -325,6 +325,12 @@ fun getOrInitializeBackend(
     },
   );
 
+  specializerEmptyDir = context.mkdir(
+    x ~> x,
+    x ~> x,
+    SKStore.DirName::create("/specializer/empty/"),
+  );
+
   specializerInitDir = backendPhase1.map(
     x ~> x,
     x ~> x,
@@ -337,7 +343,7 @@ fun getOrInitializeBackend(
         context,
         conf,
         converter,
-        specializerRootsDir,
+        specializerEmptyDir,
       );
       specializer.mclone(context).writeDiff(writer);
     },
