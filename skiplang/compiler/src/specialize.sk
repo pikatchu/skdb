@@ -558,7 +558,6 @@ class SpecializerState{
 /*****************************************************************************/
 // Conversion functions
 /*****************************************************************************/
-
 class GClassNameKey(value: GClassName) extends SKStore.Key
 class SClassIDFile(value: SClassID) extends SKStore.File
 class SortedSetSClassIDFile(value: SortedSet<SClassID>) extends SKStore.File
