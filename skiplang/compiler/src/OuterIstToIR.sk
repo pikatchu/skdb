@@ -5069,18 +5069,16 @@ fun createSpecializer(
 
 fun specializerReduce(
   context: mutable SKStore.Context,
-  handle: SKStore.EHandle<SKStore.Key, SKStore.File>,
   specializerState: SpecializerState,
-  roots: RootsIR,
-): SpecializerState {
+  roots: Array<LazyGFun>,
+): mutable Specializer {
   specializer = specializerState.mclone(context);
-  forceCompile = roots.forceCompile;
 
-  for (gid in forceCompile) {
+  for (gid in roots) {
     _ = specializer.requestFunction(context, gid, Array[])
   };
-  specializer.findAllFunctionsAndSClasses(context, handle.dirName);
-  specializer.chill()
+  specializer.findAllFunctionsAndSClasses(context);
+  specializer
 }
 
 fun createIR(

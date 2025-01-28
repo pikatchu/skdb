@@ -784,6 +784,24 @@ mutable class Specializer{
     this.!funsNeeded = SPMapFixed::mcreate(funsNeeded);
   }
 
+  readonly fun getDiff(): SortedSet<SKStore.Key> {
+    result = SortedSet<SKStore.Key>[];
+
+    for (k => _ in this.gclassMap.getDiff()) {
+      !result = result.add(GClassNameKey(k));
+    };
+    for (k => _ in this.sclassMap.getDiff()) {
+      !result = result.add(HalfSClassKey(k));
+    };
+    for (k => _ in this.sclasses.getDiff()) {
+      !result = result.add(SClassIDKey(k));
+    };
+    for (k => _ in this.funsNeeded.getDiff()) {
+      !result = result.add(GFunKeyKey(k));
+    };
+    result
+  }
+
   mutable fun gclassMapGet(key: GClassName): SortedSet<SClassID> {
     result = this.gclassMap.get(this.context, key);
     result
@@ -1031,18 +1049,11 @@ mutable class Specializer{
   // reachable from our original root set so we can compile them all.
   mutable fun findAllFunctionsAndSClasses(
     context: mutable SKStore.Context,
-    dirName: SKStore.DirName,
   ): void {
     // Keep specializing functions and types until we hit a fixed point.
     while (this.specializePendingFuns(context)) void;
-
     // TODO: Set "canInstantiate" to false for KBase with no KClass.
-
     // ??? visit all interesting const types in converter
-
-    // We had better not see any new ones we missed during this phase!
-    this.toFixed(context, dirName);
-    this.!canCreateNewSClasses = false
   }
 
   mutable fun withRegion<T>(

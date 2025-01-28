@@ -325,7 +325,7 @@ fun getOrInitializeBackend(
     },
   );
 
-  initSpecializer = backendPhase1.map(
+  specializerInitDir = backendPhase1.map(
     SKStore.IID::keyType,
     SpecializerFile::type,
     context,
@@ -343,6 +343,34 @@ fun getOrInitializeBackend(
     },
   );
 
+  _specializerKeysDir = specializerRootsDir.map(
+    x ~> x,
+    OuterIstToIR.FStackElement::type,
+    context,
+    SKStore.DirName::create("/specializer/keys/"),
+    (context, writer, fstackKey, _values) ~> {
+      specializerInit = specializerInitDir.getArray(context, SKStore.IID(0))[
+        0,
+      ].value;
+      fstackElement = fstackKey match {
+      | x @ OuterIstToIR.FStackElement _ -> x
+      | _ -> invariant_violation("Unexpected type for funStack key")
+      };
+      !specializerInit.funStack = List.Cons(
+        fstackElement,
+        specializerInit.funStack,
+      );
+      specializer = OuterIstToIR.specializerReduce(
+        context,
+        specializerInit,
+        Array[],
+      );
+      for (key in specializer.getDiff()) {
+        writer.set(key, fstackElement);
+      }
+    },
+  );
+
   specializerDir = backendPhase1.map(
     SKStore.IID::keyType,
     SpecializerFile::type,
@@ -350,15 +378,18 @@ fun getOrInitializeBackend(
     SKStore.DirName::create("/specializer/"),
     (context, writer, key, values) ~> {
       prevPhase = BackendPhase1File::type(values.first);
-      roots = prevPhase.rootsIR;
-      specializer = initSpecializer.getArray(context, SKStore.IID(0))[0].value;
-      !specializer = OuterIstToIR.specializerReduce(
+      roots = prevPhase.rootsIR.forceCompile;
+      specializerInit = specializerInitDir.getArray(context, SKStore.IID(0))[
+        0,
+      ].value;
+      specializer = OuterIstToIR.specializerReduce(
         context,
-        specializerRootsDir,
-        specializer,
+        specializerInit,
         roots,
       );
-      writer.set(key, SpecializerFile(specializer))
+      specializer.toFixed(context, specializerRootsDir.dirName);
+      specializer.!canCreateNewSClasses = false;
+      writer.set(key, SpecializerFile(specializer.chill()))
     },
   );
 
