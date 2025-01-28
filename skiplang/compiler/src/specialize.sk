@@ -992,12 +992,7 @@ mutable class Specializer{
     realGTargs.map(t -> this.getTclass3(context, t, tparamEnv))
   }
 
-  // Find the transitive closure of functions and classes
-  // reachable from our original root set so we can compile them all.
-  mutable fun findAllFunctionsAndSClasses(
-    context: mutable SKStore.Context,
-    dirName: SKStore.DirName,
-  ): void {
+  mutable fun builtins(context: mutable SKStore.Context): void {
     // Make sure our builtin types exist so we can spontaneously create
     // instances later, e.g. during lowering.
     builtinTypes = Array[
@@ -1028,6 +1023,16 @@ mutable class Specializer{
       }
     };
 
+    // Keep specializing functions and types until we hit a fixed point.
+    while (this.specializePendingFuns(context)) void;
+  }
+
+  // Find the transitive closure of functions and classes
+  // reachable from our original root set so we can compile them all.
+  mutable fun findAllFunctionsAndSClasses(
+    context: mutable SKStore.Context,
+    dirName: SKStore.DirName,
+  ): void {
     // Keep specializing functions and types until we hit a fixed point.
     while (this.specializePendingFuns(context)) void;
 

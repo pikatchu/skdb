@@ -325,6 +325,24 @@ fun getOrInitializeBackend(
     },
   );
 
+  initSpecializer = backendPhase1.map(
+    SKStore.IID::keyType,
+    SpecializerFile::type,
+    context,
+    SKStore.DirName::create("/specializer/init/"),
+    (context, writer, key, values) ~> {
+      prevPhase = BackendPhase1File::type(values.first);
+      conf = prevPhase.conf;
+      specializer = OuterIstToIR.createSpecializer(
+        context,
+        conf,
+        converter,
+        specializerRootsDir,
+      );
+      writer.set(key, SpecializerFile(specializer))
+    },
+  );
+
   specializerDir = backendPhase1.map(
     SKStore.IID::keyType,
     SpecializerFile::type,
@@ -332,14 +350,13 @@ fun getOrInitializeBackend(
     SKStore.DirName::create("/specializer/"),
     (context, writer, key, values) ~> {
       prevPhase = BackendPhase1File::type(values.first);
-      conf = prevPhase.conf;
       roots = prevPhase.rootsIR;
-      specializer = OuterIstToIR.createSpecializer(
+      specializer = initSpecializer.getArray(context, SKStore.IID(0))[0].value;
+      !specializer = OuterIstToIR.specializerReduce(
         context,
-        conf,
-        converter,
-        roots,
         specializerRootsDir,
+        specializer,
+        roots,
       );
       writer.set(key, SpecializerFile(specializer))
     },
