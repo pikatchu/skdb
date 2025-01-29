@@ -201,6 +201,9 @@ class SpecializerFile(
   value: OuterIstToIR.SpecializerState,
 ) extends SKStore.File
 
+class Left(Array<SKStore.File>) extends SKStore.File
+class Right(Array<SKStore.File>) extends SKStore.File
+
 fun getOrInitializeBackend(
   context: mutable SKStore.Context,
   ptrBitSize: Int,
@@ -460,11 +463,8 @@ fun getOrInitializeBackend(
       (
         specializerInitDir,
         (
-          (context, writer, key, values) ~> {
-            otherValues = specializerReducedDir.getArray(context, key);
-            if (otherValues.size() == 0) {
-              writer.setArray(key, values.collect(Array))
-            }
+          (_context, writer, key, values) ~> {
+            writer.set(key, Left(values.collect(Array)))
           },
           None(),
         ),
@@ -473,13 +473,37 @@ fun getOrInitializeBackend(
         specializerReducedDir,
         (
           (_context, writer, key, values) ~> {
-            writer.setArray(key, values.collect(Array))
+            writer.set(key, Right(values.collect(Array)))
           },
           None(),
         ),
       ),
     ],
+    SKStore.DirName::create("/specializer/all/union/"),
+  ).map(
+    x ~> x,
+    x ~> x,
+    context,
     SKStore.DirName::create("/specializer/all/"),
+    (_context, writer, key, valueIter) ~> {
+      values = valueIter.collect(Array);
+      for (value in values) {
+        value match {
+        | Right(x) ->
+          writer.setArray(key, x);
+          return void
+        | _ -> void
+        }
+      };
+      for (value in values) {
+        value match {
+        | Left(x) ->
+          writer.setArray(key, x);
+          return void
+        | _ -> void
+        }
+      };
+    },
   );
 
   specializerDir = backendPhase1.map(
@@ -490,20 +514,6 @@ fun getOrInitializeBackend(
     (context, writer, key, values) ~> {
       prevPhase = BackendPhase1File::type(values.first);
       config = prevPhase.conf;
-      /*
-      roots = prevPhase.rootsIR.forceCompile;
-      specializerInit = OuterIstToIR.Specializer::make(
-        specializerInitDir,
-        context,
-        config,
-        converter,
-      ).chill();
-      specializer = OuterIstToIR.specializerReduce(
-        context,
-        specializerInit,
-        roots,
-      );
-      */
       specializer = OuterIstToIR.Specializer::make(
         specializerAllDir,
         context,
