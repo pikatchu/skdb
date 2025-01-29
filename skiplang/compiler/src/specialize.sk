@@ -403,6 +403,7 @@ mutable base class SPMap<K: Orderable, V>{} {
   mutable fun replace(other: readonly SPMap<K, V>): void;
   readonly fun toFixed(): readonly SPMapFixed<K, V>;
   readonly fun getDiff(): SortedMap<K, V>;
+  readonly fun getReads(): SortedSet<SKStore.Key>;
 }
 
 mutable class SPMapDiff<K: Orderable, V>{
@@ -411,6 +412,7 @@ mutable class SPMapDiff<K: Orderable, V>{
   v2File: V ~> SKStore.File,
   file2V: SKStore.File ~> V,
   mutable handle: SKStore.EHandle<SKStore.Key, SKStore.File>,
+  mutable reads: SortedSet<K> = SortedSet[],
   mutable data: SortedMap<K, V> = SortedMap[],
 } extends SPMap<K, V> {
   readonly fun chill(): SPMap<K, V> {
@@ -438,11 +440,16 @@ mutable class SPMapDiff<K: Orderable, V>{
     this.data
   }
 
+  readonly fun getReads(): SortedSet<SKStore.Key> {
+    this.reads.map(this.k2Key)
+  }
+
   readonly fun readonlyGet(_k: K): V {
     invariant_violation("Cannot call readonlyGet from SPMapDiff")
   }
 
   mutable fun get(context: mutable SKStore.Context, k: K): V {
+    this.!reads = this.reads.set(k);
     this.data.maybeGet(k) match {
     | None() ->
       arr = this.handle.getArray(context, this.k2Key(k));
@@ -454,6 +461,7 @@ mutable class SPMapDiff<K: Orderable, V>{
   }
 
   mutable fun maybeGet(context: mutable SKStore.Context, k: K): ?V {
+    this.!reads = this.reads.set(k);
     this.data.maybeGet(k) match {
     | None() ->
       arr = this.handle.getArray(context, this.k2Key(k));
@@ -491,6 +499,9 @@ mutable class SPMapFixed<K: Orderable, V>{
   readonly fun getDiff(): SortedMap<K, V> {
     invariant_violation("Cannot call getDiff on SPMapFixed");
   }
+  readonly fun getReads(): SortedSet<SKStore.Key> {
+    invariant_violation("Cannot call getReads on SPMapFixed");
+  }
 
   readonly fun chill(): SPMap<K, V> {
     SPMapFixed{data => this.data}
@@ -524,7 +535,11 @@ mutable class SPMapFixed<K: Orderable, V>{
   }
 }
 
-class FStackElement(GFunction, Array<Tclass>) extends SKStore.Key, SKStore.File
+class FStackElement(
+  lazyGFun: LazyGFun,
+  methodTargs: Array<Tclass>,
+  classTargs: Array<Tclass>,
+) extends SKStore.Key, SKStore.File
 
 class SpecializerState{
   gclassMap: SPMap<GClassName, SortedSet<SClassID>>,
@@ -816,38 +831,120 @@ mutable class Specializer{
     this.!funsNeeded = SPMapFixed::mcreate(funsNeeded);
   }
 
-  readonly fun getDiff(): SortedSet<SKStore.Key> {
+  readonly fun createsNewClass(): Bool {
+    this.gclassMap match {
+    | sp @ SPMapDiff _ -> !sp.data.isEmpty()
+    | _ -> false
+    }
+  }
+
+  readonly fun getUsedKeys(): SortedSet<SKStore.Key> {
     result = SortedSet<SKStore.Key>[];
 
+    !result = result.union(this.gclassMap.getReads());
     for (k => _ in this.gclassMap.getDiff()) {
-      !result = result.add(GClassNameKey(k));
+      !result = result.set(GClassNameKey(k));
     };
+
+    !result = result.union(this.sclassMap.getReads());
     for (k => _ in this.sclassMap.getDiff()) {
-      !result = result.add(HalfSClassKey(k));
+      !result = result.set(HalfSClassKey(k));
     };
+
+    !result = result.union(this.sclasses.getReads());
     for (k => _ in this.sclasses.getDiff()) {
-      !result = result.add(SClassIDKey(k));
+      !result = result.set(SClassIDKey(k));
     };
+
+    !result = result.union(this.funsNeeded.getReads());
     for (k => _ in this.funsNeeded.getDiff()) {
-      !result = result.add(GFunKeyKey(k));
+      !result = result.set(GFunKeyKey(k));
     };
     result
   }
 
   readonly fun writeDiff(
     writer: mutable SKStore.TWriter<SKStore.Key, SKStore.File>,
+    specializer2: ?readonly Specializer = None(),
   ): void {
     for (k => v in this.gclassMap.getDiff()) {
+      specializer2 match {
+      | None() -> void
+      | Some(sp2) ->
+        sp2.gclassMap.getDiff().maybeGet(k) match {
+        | None() ->
+          invariant_violation("Key not found: " + inspect(k).toString())
+        | Some(v2) ->
+          if (v != v2) {
+            invariant_violation(
+              "Not writing the same thing for key: " + inspect(k).toString(),
+            )
+          }
+        }
+      };
       writer.set(GClassNameKey(k), SortedSetSClassIDFile(v));
     };
     for (k => v in this.sclassMap.getDiff()) {
+      specializer2 match {
+      | None() -> void
+      | Some(sp2) ->
+        sp2.sclassMap.getDiff().maybeGet(k) match {
+        | None() ->
+          invariant_violation("Key not found: " + inspect(k).toString())
+        | Some(v2) ->
+          if (v != v2) {
+            invariant_violation(
+              "Not writing the same thing for key: " + inspect(k).toString(),
+            )
+          }
+        }
+      };
+
       writer.set(HalfSClassKey(k), SClassIDFile(v));
     };
     for (k => v in this.sclasses.getDiff()) {
+      specializer2 match {
+      | None() -> void
+      | Some(sp2) ->
+        sp2.sclasses.getDiff().maybeGet(k) match {
+        | None() ->
+          invariant_violation("Key not found: " + inspect(k).toString())
+        | Some(v2) ->
+          if (inspect(v).toString() != inspect(v2).toString()) {
+            debug(v);
+            debug(v2);
+            invariant_violation(
+              "Not writing the same thing for key: " + inspect(k).toString(),
+            )
+          }
+        }
+      };
+
       writer.set(SClassIDKey(k), SClassInfoFile(v));
     };
     for (k => v in this.funsNeeded.getDiff()) {
+      specializer2 match {
+      | None() -> void
+      | Some(sp2) ->
+        sp2.funsNeeded.getDiff().maybeGet(k) match {
+        | None() ->
+          invariant_violation("Key not found: " + inspect(k).toString())
+        | Some(v2) ->
+          if (v != v2) {
+            invariant_violation(
+              "Not writing the same thing for key: " + inspect(k).toString(),
+            )
+          }
+        }
+      };
+
       writer.set(GFunKeyKey(k), GFunKeyFile(v));
+    };
+  }
+
+  mutable fun requestFunctions(roots: Array<LazyGFun>): void {
+    for (gid in roots) {
+      _ = this.requestFunction(gid, Array[])
     };
   }
 
@@ -1127,7 +1224,17 @@ mutable class Specializer{
     while (!this.funStackIsEmpty()) {
       !changed = true;
       this.funStackPop() match {
-      | FStackElement(f, targs) ->
+      | FStackElement(name, methodTargs, classTargs) ->
+        f = this.converter.getGFunction(context, name);
+
+        targs = classTargs.concat(methodTargs);
+        if (f.funInfo.tparams.size() != targs.size()) {
+          this.pos.die(
+            `tparam count mismatch in requestFunction for ${f}; ` +
+              `expected ${f.funInfo.tparams}, but got ${targs}`,
+          )
+        };
+
         this.withRegion(context, (context, specializer) ~> {
           specializer.specializePendingFun(context, f, targs);
         })
@@ -1182,7 +1289,6 @@ mutable class Specializer{
         instr match {
         | GCallFunctionBase{name, targs => innerTargs} ->
           _ = this.requestFunction(
-            context,
             name,
             innerTargs.map(t -> this.getTclass3(context, t, tparamEnv)),
           )
@@ -2106,7 +2212,6 @@ mutable class Specializer{
         hostInfo = this.trackedSClassGet(hostID);
         host = hostInfo.sclass;
         this.requestFunction(
-          context,
           getLazyGFun(context, hostInfo.lazyGClass),
           m.targs.id,
           host.superposition.id,
@@ -2170,7 +2275,6 @@ mutable class Specializer{
   // Ask that the requested function be compiled to machine code compatible
   // with the given targs.
   mutable fun requestFunction(
-    context: mutable SKStore.Context,
     name: LazyGFun,
     methodTargs: Array<Tclass>,
     classTargs: Array<Tclass> = Array[],
@@ -2181,20 +2285,9 @@ mutable class Specializer{
     );
     key = GFunKey(name, superposition);
 
-    converter = this.converter;
-    function = converter.getGFunction(context, name);
-
     if (!this.funsNeededContains(key)) {
       this.funsNeededSet(key);
-
-      newTargs = classTargs.concat(methodTargs);
-      if (function.funInfo.tparams.size() != newTargs.size()) {
-        this.pos.die(
-          `tparam count mismatch in requestFunction for ${function}; ` +
-            `expected ${function.funInfo.tparams}, but got ${newTargs}`,
-        )
-      };
-      this.funStackPush(FStackElement(function, newTargs))
+      this.funStackPush(FStackElement(name, methodTargs, classTargs))
     }
   }
 

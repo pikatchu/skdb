@@ -310,17 +310,16 @@ fun getOrInitializeBackend(
   );
 
   specializerRootsDir = backendPhase1.map(
-    x ~> x,
-    x ~> x,
+    OuterIstToIR.FStackElement::keyType,
+    OuterIstToIR.FStackElement::type,
     context,
     SKStore.DirName::create("/specializer/roots/"),
-    (context, writer, _, values) ~> {
+    (_context, writer, _, values) ~> {
       prevPhase = BackendPhase1File::type(values.first);
       roots = prevPhase.rootsIR;
       for (root in roots.forceCompile) {
-        function = converter.getGFunction(context, root);
-        elt = OuterIstToIR.FStackElement(function, Array[]);
-        writer.set(elt, elt);
+        fstackElement = OuterIstToIR.FStackElement(root, Array[], Array[]);
+        writer.set(fstackElement, fstackElement);
       }
     },
   );
@@ -363,23 +362,25 @@ fun getOrInitializeBackend(
         context,
         config,
         converter,
-      ).chill();
-
-      fstackElement = fstackKey match {
-      | x @ OuterIstToIR.FStackElement _ -> x
-      | _ -> invariant_violation("Unexpected type for funStack key")
-      };
-      !specializerInit.funStack = List.Cons(
-        fstackElement,
-        specializerInit.funStack,
       );
+
+      specializerInit.requestFunction(
+        fstackKey.lazyGFun,
+        fstackKey.methodTargs,
+        fstackKey.classTargs,
+      );
+
       specializer = OuterIstToIR.specializerReduce(
         context,
-        specializerInit,
+        specializerInit.chill(),
         Array[],
       );
-      for (key in specializer.getDiff()) {
-        writer.set(key, fstackElement);
+      if (specializer.createsNewClass()) {
+        writer.set(SKStore.IID(0), fstackKey)
+      } else {
+        for (key in specializer.getUsedKeys()) {
+          writer.set(key, fstackKey);
+        }
       }
     },
   );
@@ -404,15 +405,18 @@ fun getOrInitializeBackend(
     SKStore.DirName::create("/specializer/deps/"),
     (context, self, key) ~> {
       keyDeps = specializerArrows.getArray(context, key);
-      result = mutable Vector[];
+      result = SortedSet<OuterIstToIR.FStackElement>[key];
       for (dep in keyDeps) {
-        result.extend(self.getArrayWithOptions(context, dep, false));
+        !result = result.set(dep);
+        for (dep2 in self.getArrayWithOptions(context, dep, false)) {
+          !result = result.set(dep2);
+        }
       };
       result.toArray()
     },
   );
 
-  _specializerReduced = specializerArrows.map(
+  specializerReducedDir = specializerArrows.map(
     x ~> x,
     x ~> x,
     context,
@@ -429,16 +433,53 @@ fun getOrInitializeBackend(
         context,
         config,
         converter,
-      ).chill();
+      );
 
-      !specializerInit.funStack = List::createFromItems(deps);
+      for (dep in deps) {
+        specializerInit.requestFunction(
+          dep.lazyGFun,
+          dep.methodTargs,
+          dep.classTargs,
+        );
+      };
+
       specializer = OuterIstToIR.specializerReduce(
         context,
-        specializerInit,
+        specializerInit.chill(),
         Array[],
       );
       specializer.writeDiff(writer)
     },
+  );
+
+  specializerAllDir = SKStore.EHandle::multiMap(
+    x ~> x,
+    x ~> x,
+    context,
+    Array[
+      (
+        specializerInitDir,
+        (
+          (context, writer, key, values) ~> {
+            otherValues = specializerReducedDir.getArray(context, key);
+            if (otherValues.size() == 0) {
+              writer.setArray(key, values.collect(Array))
+            }
+          },
+          None(),
+        ),
+      ),
+      (
+        specializerReducedDir,
+        (
+          (_context, writer, key, values) ~> {
+            writer.setArray(key, values.collect(Array))
+          },
+          None(),
+        ),
+      ),
+    ],
+    SKStore.DirName::create("/specializer/all/"),
   );
 
   specializerDir = backendPhase1.map(
@@ -449,6 +490,7 @@ fun getOrInitializeBackend(
     (context, writer, key, values) ~> {
       prevPhase = BackendPhase1File::type(values.first);
       config = prevPhase.conf;
+      /*
       roots = prevPhase.rootsIR.forceCompile;
       specializerInit = OuterIstToIR.Specializer::make(
         specializerInitDir,
@@ -460,6 +502,13 @@ fun getOrInitializeBackend(
         context,
         specializerInit,
         roots,
+      );
+      */
+      specializer = OuterIstToIR.Specializer::make(
+        specializerAllDir,
+        context,
+        config,
+        converter,
       );
       specializer.toFixed(context);
       specializer.!canCreateNewSClasses = false;

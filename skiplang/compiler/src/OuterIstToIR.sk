@@ -5073,10 +5073,7 @@ fun specializerReduce(
   roots: Array<LazyGFun>,
 ): mutable Specializer {
   specializer = specializerState.mclone(context);
-
-  for (gid in roots) {
-    _ = specializer.requestFunction(context, gid, Array[])
-  };
+  specializer.requestFunctions(roots);
   specializer.findAllFunctionsAndSClasses(context);
   specializer
 }
