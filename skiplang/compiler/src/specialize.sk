@@ -546,6 +546,7 @@ class SpecializerState{
   sclassMap: SPMap<HalfSClass, SClassID>,
   sclasses: SPMap<SClassID, SClassInfo>,
   funsNeeded: SPMap<GFunKey, GFunKey>,
+  funSet: SortedSet<FStackElement>,
   funStack: List<FStackElement>,
   converter: Converter,
   config: Config.Config,
@@ -672,8 +673,11 @@ mutable class Specializer{
   // Everything in here was pushed on funStack at some point.
   private mutable funsNeeded: mutable SPMap<GFunKey, GFunKey>,
 
+  // The set of functions present in funStack
+  mutable funSet: SortedSet<FStackElement> = SortedSet[],
+
   // Functions we still need to analyze with a new set of Targs.
-  private mutable funStack: List<FStackElement> = List[],
+  mutable funStack: List<FStackElement> = List[],
 
   converter: Converter,
 
@@ -1031,6 +1035,7 @@ mutable class Specializer{
       sclassMap => this.sclassMap.chill(),
       sclasses => this.sclasses.chill(),
       funsNeeded => this.funsNeeded.chill(),
+      funSet => this.funSet,
       funStack => this.funStack,
       converter => this.converter,
       config => this.config,
@@ -1045,6 +1050,7 @@ mutable class Specializer{
     this.sclassMap.replace(other.sclassMap);
     this.sclasses.replace(other.sclasses);
     this.funsNeeded.replace(other.funsNeeded);
+    this.!funSet = other.funSet;
     this.!funStack = other.funStack;
     this.!canCreateNewSClasses = other.canCreateNewSClasses;
     this.!verifyChanged = this.verifyChanged;
@@ -1188,7 +1194,7 @@ mutable class Specializer{
     };
 
     // Keep specializing functions and types until we hit a fixed point.
-    while (this.specializePendingFuns(context)) void;
+    this.specializePendingFuns(context);
   }
 
   // Find the transitive closure of functions and classes
@@ -1197,7 +1203,7 @@ mutable class Specializer{
     context: mutable SKStore.Context,
   ): void {
     // Keep specializing functions and types until we hit a fixed point.
-    while (this.specializePendingFuns(context)) void;
+    this.specializePendingFuns(context);
     // TODO: Set "canInstantiate" to false for KBase with no KClass.
     // ??? visit all interesting const types in converter
   }
@@ -1219,36 +1225,47 @@ mutable class Specializer{
   // Specializes pending functions. Returns true if anything changed.
   private mutable fun specializePendingFuns(
     context: mutable SKStore.Context,
-  ): Bool {
-    changed = false;
+  ): void {
     while (!this.funStackIsEmpty()) {
-      !changed = true;
       this.funStackPop() match {
       | FStackElement(name, methodTargs, classTargs) ->
-        f = this.converter.getGFunction(context, name);
-
-        targs = classTargs.concat(methodTargs);
-        if (f.funInfo.tparams.size() != targs.size()) {
-          this.pos.die(
-            `tparam count mismatch in requestFunction for ${f}; ` +
-              `expected ${f.funInfo.tparams}, but got ${targs}`,
-          )
-        };
-
         this.withRegion(context, (context, specializer) ~> {
-          specializer.specializePendingFun(context, f, targs);
+          specializer.specializePendingFun(
+            context,
+            name,
+            methodTargs,
+            classTargs,
+          );
         })
-      }
+      };
     };
-
-    changed
   }
 
-  private mutable fun specializePendingFun(
+  mutable fun specializePendingFun(
     context: mutable SKStore.Context,
-    f: GFunction,
-    targs: Array<Tclass>,
+    fname: LazyGFun,
+    methodTargs: Array<Tclass>,
+    classTargs: Array<Tclass>,
   ): void {
+    superposition = FunSuperpositionID(
+      ClassSuperpositionID(classTargs),
+      MethodSuperpositionID(methodTargs),
+    );
+    gfunKey = GFunKey(fname, superposition);
+
+    if (!this.funsNeededContains(gfunKey)) {
+      this.funsNeededSet(gfunKey);
+    };
+
+    targs = classTargs.concat(methodTargs);
+    f = this.converter.getGFunction(context, fname);
+    if (f.funInfo.tparams.size() != targs.size()) {
+      this.pos.die(
+        `tparam count mismatch in requestFunction for ${f}; ` +
+          `expected ${f.funInfo.tparams}, but got ${targs}`,
+      )
+    };
+
     oldPos = this.pos;
 
     tparamEnv = makeTypeMap(f.funInfo.tparams, targs, f.funInfo.pos);
@@ -2279,15 +2296,16 @@ mutable class Specializer{
     methodTargs: Array<Tclass>,
     classTargs: Array<Tclass> = Array[],
   ): void {
+    fstackElement = FStackElement(name, methodTargs, classTargs);
     superposition = FunSuperpositionID(
       ClassSuperpositionID(classTargs),
       MethodSuperpositionID(methodTargs),
     );
     key = GFunKey(name, superposition);
 
-    if (!this.funsNeededContains(key)) {
-      this.funsNeededSet(key);
-      this.funStackPush(FStackElement(name, methodTargs, classTargs))
+    if (!this.funSet.contains(fstackElement) && !this.funsNeededContains(key)) {
+      this.!funSet = this.funSet.add(fstackElement);
+      this.funStackPush(fstackElement)
     }
   }
 

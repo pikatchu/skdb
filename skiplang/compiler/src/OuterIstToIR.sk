@@ -5067,17 +5067,6 @@ fun createSpecializer(
   specializer.chill()
 }
 
-fun specializerReduce(
-  context: mutable SKStore.Context,
-  specializerState: SpecializerState,
-  roots: Array<LazyGFun>,
-): mutable Specializer {
-  specializer = specializerState.mclone(context);
-  specializer.requestFunctions(roots);
-  specializer.findAllFunctionsAndSClasses(context);
-  specializer
-}
-
 fun createIR(
   context: mutable SKStore.Context,
   config: Config.Config,
