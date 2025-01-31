@@ -343,7 +343,7 @@ fun getOrInitializeBackend(
 
   specializerAllDir = specializerInitDir;
 
-  lastPhase = 1;
+  lastPhase = 20;
 
   for (phaseNumber in Range(0, lastPhase + 1)) {
     specializerAllDirCopy = specializerAllDir;
@@ -385,59 +385,23 @@ fun getOrInitializeBackend(
           );
         };
 
-        if (true || specializer.createsNewClass()) {
+        if (specializer.changedSomething()) {
           writer.set(SKStore.IID(0), fstackKey)
         } else {
-          for (key in specializer.getUsedKeys()) {
-            writer.set(key, fstackKey);
-          }
+          writer.set(fstackKey, fstackKey);
         }
       },
     );
 
-    specializerArrows = specializerKeysDir.map(
-      OuterIstToIR.FStackElement::keyType,
-      OuterIstToIR.FStackElement::type,
-      context,
-      SKStore.DirName::create("/specializer/arrows/" + phaseNumber + "/"),
-      (_context, writer, _key, valueIter) ~> {
-        values = valueIter.collect(Array);
-        for (value in values) {
-          writer.setArray(value, values)
-        }
-      },
-    );
-
-    specializerGetDep = SKStore.LHandle::create(
-      OuterIstToIR.FStackElement::keyType,
-      OuterIstToIR.FStackElement::type,
-      context,
-      SKStore.DirName::create("/specializer/deps/" + phaseNumber + "/"),
-      (context, self, key) ~> {
-        keyDeps = specializerArrows.getArray(context, key);
-        result = SortedSet<OuterIstToIR.FStackElement>[key];
-        for (dep in keyDeps) {
-          !result = result.set(dep);
-          for (dep2 in self.getArrayWithOptions(context, dep, false)) {
-            !result = result.set(dep2);
-          }
-        };
-        result.toArray()
-      },
-    );
-
-    specializerReducedDir = specializerArrows.map(
+    specializerReducedDir = specializerKeysDir.map(
       x ~> x,
       x ~> x,
       context,
       SKStore.DirName::create("/specializer/reduced/" + phaseNumber + "/"),
-      (context, writer, key, _values) ~> {
+      (context, writer, _key, values) ~> {
         prevPhase = backendPhase1.getArray(context, SKStore.IID(0))[0];
         config = prevPhase.conf;
-        deps = specializerGetDep.getArrayWithOptions(context, key, false);
-        for (dep in deps) {
-          if (dep < key) return void
-        };
+        deps = values.collect(Array);
         specializer = OuterIstToIR.Specializer::make(
           specializerAllDirCopy,
           context,

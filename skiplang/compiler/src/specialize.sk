@@ -837,19 +837,24 @@ mutable class Specializer{
     this.!funsNeeded = SPMapFixed::mcreate(funsNeeded);
   }
 
-  readonly fun createsNewClass(): Bool {
+  readonly fun changedSomething(): Bool {
     gclassMapChanged = this.gclassMap match {
     | sp @ SPMapDiff _ -> !sp.data.isEmpty()
-    | _ -> false
+    | _ -> invariant_violation("Invalid call for changedSomething")
     };
     sclassMapChanged = this.sclassMap match {
     | sc @ SPMapDiff _ -> !sc.data.isEmpty()
-    | _ -> false
+    | _ -> invariant_violation("Invalid call for changedSomething")
     };
     sclassesChanged = this.sclasses match {
     | sc @ SPMapDiff _ -> !sc.data.isEmpty()
-    | _ -> false
+    | _ -> invariant_violation("Invalid call for changedSomething")
     };
+    /*    funsNeededChanged = this.funsNeeded match {
+        | funs @ SPMapDiff _ -> !funs.data.isEmpty()
+        | _ -> invariant_violation("Invalid call for changedSomething")
+        };
+    */
     gclassMapChanged || sclassMapChanged || sclassesChanged
   }
 
