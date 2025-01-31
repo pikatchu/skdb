@@ -422,6 +422,7 @@ mutable class SPMapDiff<K: Orderable, V>{
       v2File => this.v2File,
       file2V => this.file2V,
       handle => this.handle,
+      reads => this.reads,
       data => this.data,
     }
   }
@@ -432,6 +433,7 @@ mutable class SPMapDiff<K: Orderable, V>{
       v2File => this.v2File,
       file2V => this.file2V,
       handle => this.handle,
+      reads => this.reads,
       data => this.data,
     }
   }
@@ -661,7 +663,7 @@ mutable class Specializer{
   context: mutable SKStore.Context,
 
   // For each FrontEndLazyGClass, what are all its SClass instances?
-  private mutable gclassMap: mutable SPMap<GClassName, SortedSet<SClassID>>,
+  mutable gclassMap: mutable SPMap<GClassName, SortedSet<SClassID>>,
 
   // Maps (FrontEndLazyGClass, GTargs) to SClassID.
   private mutable sclassMap: mutable SPMap<HalfSClass, SClassID>,
@@ -836,10 +838,19 @@ mutable class Specializer{
   }
 
   readonly fun createsNewClass(): Bool {
-    this.gclassMap match {
+    gclassMapChanged = this.gclassMap match {
     | sp @ SPMapDiff _ -> !sp.data.isEmpty()
     | _ -> false
-    }
+    };
+    sclassMapChanged = this.sclassMap match {
+    | sc @ SPMapDiff _ -> !sc.data.isEmpty()
+    | _ -> false
+    };
+    sclassesChanged = this.sclasses match {
+    | sc @ SPMapDiff _ -> !sc.data.isEmpty()
+    | _ -> false
+    };
+    gclassMapChanged || sclassMapChanged || sclassesChanged
   }
 
   readonly fun getUsedKeys(): SortedSet<SKStore.Key> {
