@@ -191,7 +191,7 @@ fun ensureCompatibleLLVMVersion(): void {
   }
 }
 
-class TickConfigFile(value: (Int, Config.Config)) extends SKStore.File
+class ConfigFile(value: Config.Config) extends SKStore.File
 class BackendPhase1File(
   conf: Config.Config,
   rootsIR: OuterIstToIR.RootsIR,
@@ -218,7 +218,7 @@ fun getOrInitializeBackend(
   _ = context.mkdir(x ~> x, x ~> x, FileCache.packageDirName);
   backendDir = context.mkdir(
     SKStore.IID::keyType,
-    TickConfigFile::type,
+    ConfigFile::type,
     backendDirName,
   );
 
@@ -240,7 +240,7 @@ fun getOrInitializeBackend(
     context,
     SKStore.DirName::create("/backendPhase1/"),
     (context, writer, key, values) ~> {
-      (_, conf) = TickConfigFile::type(values.first).value;
+      conf = ConfigFile::type(values.first).value;
 
       context.getGlobal("ERRORS") match {
       | None() -> void
@@ -343,7 +343,7 @@ fun getOrInitializeBackend(
 
   specializerAllDir = specializerInitDir;
 
-  lastPhase = 20;
+  lastPhase = 10;
 
   for (phaseNumber in Range(0, lastPhase + 1)) {
     specializerAllDirCopy = specializerAllDir;
@@ -511,7 +511,7 @@ fun getOrInitializeBackend(
 
   _ = backendPhase1.map(
     SKStore.IID::keyType,
-    TickConfigFile::type,
+    ConfigFile::type,
     context,
     SKStore.DirName::create("/backendPhase2/"),
     (context, _writer, _key, values) ~> {
@@ -580,7 +580,7 @@ fun compile(
   getOrInitializeBackend(context, config.ptrBitSize).writeArray(
     context,
     SKStore.IID(0),
-    Array[TickConfigFile((context.tick.value, config))],
+    Array[ConfigFile(config)],
   );
 
   FileCache.writeFiles(
