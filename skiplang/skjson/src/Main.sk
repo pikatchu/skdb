@@ -1,8 +1,6 @@
 module SKJSON;
 
 fun main(): void {
-  debug("foo");
-  debug("bar");
   saved = SKStore.newObstack();
   cmd = Cli.Command("skjson")
     .about("Skip JSON tooling")
