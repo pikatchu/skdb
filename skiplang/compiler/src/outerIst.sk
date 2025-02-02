@@ -144,14 +144,14 @@ class Program private (program: SKStore.EHandle<SKStore.SID, DefFile>) {
     context: mutable SKStore.Context,
     constsDir: SKStore.EHandle<SKStore.IID, ConstDefFile>,
   ): Array<ConstDef> {
-    constsDir.unsafeGetArray(context, SKStore.IID(0)).map(x -> x.value)
+    constsDir.getArray(context, SKStore.IID(0)).map(x -> x.value)
   }
 
   fun getFuns(
     context: mutable SKStore.Context,
     funsDir: SKStore.EHandle<SKStore.IID, FunDefFile>,
   ): Array<FunDef> {
-    funsDir.unsafeGetArray(context, SKStore.IID(0)).map(x -> x.value)
+    funsDir.getArray(context, SKStore.IID(0)).map(x -> x.value)
   }
 }
 

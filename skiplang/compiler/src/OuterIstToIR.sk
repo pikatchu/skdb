@@ -5071,10 +5071,8 @@ fun createIR(
   context: mutable SKStore.Context,
   config: Config.Config,
   roots: RootsIR,
-  frozenSpecializer: SpecializerState,
+  specializer: mutable Specializer,
 ): GlobalEnv {
-  specializer = frozenSpecializer.mclone(context);
-
   // Latch the sub- and supertypes.
   for (info in specializer.getSClasses()) {
     !info.sclass = info.sclass with {
