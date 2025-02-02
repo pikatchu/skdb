@@ -812,8 +812,7 @@ mutable class Specializer{
           }
         }
 
-      | FStackElement _ -> // for now that is ok, but we should get rid of it
-        void
+      | SKStore.IID _ -> void
 
       | _ -> invariant_violation("Unexpected key type")
       }
