@@ -191,7 +191,7 @@ fun ensureCompatibleLLVMVersion(): void {
   }
 }
 
-class TickConfigFile(tick: Int, value: Config.Config) extends SKStore.File
+class ConfigFile(value: Config.Config) extends SKStore.File
 class BackendPhase1File(
   conf: Config.Config,
   rootsIR: OuterIstToIR.RootsIR,
@@ -223,7 +223,7 @@ fun getOrInitializeBackend(
   _ = context.mkdir(x ~> x, x ~> x, FileCache.packageDirName);
   backendDir = context.mkdir(
     SKStore.IID::keyType,
-    TickConfigFile::type,
+    ConfigFile::type,
     backendDirName,
   );
 
@@ -256,15 +256,6 @@ fun getOrInitializeBackend(
             FileCache.fileDir.unsafeGetArray(context, file)[0].value
           },
         )
-      };
-
-      if (conf.check) {
-        return void;
-      };
-
-      if (conf.emit == "sklib") {
-        compile_sklib(conf);
-        return void
       };
 
       // Create a filter for what functions to compile.
@@ -313,6 +304,7 @@ fun getOrInitializeBackend(
         constsProj,
         defsProj,
       );
+      debug(("phase1 updated", defsIR.forceCompile.size()));
       writer.set(key, BackendPhase1File(conf, defsIR))
     },
   );
@@ -323,13 +315,13 @@ fun getOrInitializeBackend(
     SKStore.DirName::create("/specializer/empty/"),
   );
 
-  specializerInitDir = backendPhase1.map(
+  specializerInitDir = backendDir.map(
     x ~> x,
     x ~> x,
     context,
     SKStore.DirName::create("/specializer/init/"),
-    (context, writer, _key, values) ~> {
-      prevPhase = BackendPhase1File::type(values.first);
+    (context, writer, _key, _values) ~> {
+      prevPhase = backendPhase1.getArray(context, SKStore.IID(0))[0];
       conf = prevPhase.conf;
       specializer = OuterIstToIR.createSpecializer(
         context,
@@ -341,115 +333,127 @@ fun getOrInitializeBackend(
       roots = prevPhase.rootsIR.forceCompile.map(root ->
         OuterIstToIR.FStackElement(root, Array[], Array[])
       );
+      debug("Updating roots");
       writer.setArray(SKStore.IID(0), roots);
     },
   );
 
-  specializerDir = backendPhase1.map(
-    SKStore.IID::keyType,
-    SpecializerDirFile::type,
-    context,
-    SKStore.DirName::create("/specializer/"),
-    (context, writer, _, _valueIter) ~> {
-      specializerAllDir = specializerInitDir;
+  /*  specializerDir = backendDir.map(
+  SKStore.IID::keyType,
+  SpecializerDirFile::type,
+  context,
+  SKStore.DirName::create("/specializer/"),
+  (context, writer, _, _) ~> {
+  */
+  specializerAllDir = specializerInitDir;
 
-      lastPhase = 3;
+  lastPhase = 5;
 
-      for (phaseNumber in Range(0, lastPhase + 1)) {
-        specializerAllDirCopy = specializerAllDir;
-        !specializerAllDir = specializerAllDir
-          .map(
-            x ~> x,
-            x ~> x,
-            context,
-            SKStore.DirName::create(
-              "/specializer/reduced/" + phaseNumber + "/",
-            ),
-            (context, writer, key, values) ~> {
-              key match {
-              | SKStore.IID _ ->
-                prevPhase = backendPhase1.getArray(context, SKStore.IID(0))[0];
-                config = prevPhase.conf;
-                deps = values
-                  .collect(Array)
-                  .map(OuterIstToIR.FStackElement::type);
-                specializer = OuterIstToIR.Specializer::make(
-                  specializerAllDirCopy,
-                  context,
-                  config,
-                  converter,
-                );
+  for (phaseNumber in Range(0, lastPhase + 1)) {
+    specializerAllDirCopy = specializerAllDir;
+    !specializerAllDir = specializerAllDir
+      .map(
+        x ~> x,
+        x ~> x,
+        context,
+        SKStore.DirName::create("/specializer/reduced/" + phaseNumber + "/"),
+        (context, writer, key, values) ~> {
+          key match {
+          | SKStore.IID _ ->
+            debug(("KK", phaseNumber));
+            config = backendDir.getArray(context, SKStore.IID(0))[0].value;
+            deps = values.collect(Array).map(OuterIstToIR.FStackElement::type);
+            specializer = OuterIstToIR.Specializer::make(
+              specializerAllDirCopy,
+              context,
+              config,
+              converter,
+            );
 
-                for (dep in deps) {
-                  if (phaseNumber == lastPhase) {
-                    specializer.requestFunction(
-                      dep.lazyGFun,
-                      dep.methodTargs,
-                      dep.classTargs,
-                    );
-                    specializer.findAllFunctionsAndSClasses(context);
-                  } else {
-                    specializer.specializePendingFun(
-                      context,
-                      dep.lazyGFun,
-                      dep.methodTargs,
-                      dep.classTargs,
-                    );
-                  }
-                };
-
-                specializer.writeDiff(writer);
-                writer.setArray(SKStore.IID(0), specializer.funStack.toArray())
-              | _ -> writer.set(key, OldFile(values.collect(Array)))
+            firstDeps = mutable Vector[];
+            remainingDeps = mutable Vector[];
+            for (i in Range(0, deps.size())) {
+              if (i < 100) firstDeps.push(deps[i]) else {
+                remainingDeps.push(deps[i])
               }
-            },
-          )
-          .map(
-            x ~> x,
-            x ~> x,
-            context,
-            SKStore.DirName::create("/specializer/merge/" + phaseNumber + "/"),
-            (_context, writer, key, values) ~> {
-              files = mutable Vector[];
-              oldFiles = mutable Vector[];
-              for (file in values) {
-                file match {
-                | OldFile(x) -> oldFiles.extend(x)
-                | x -> files.push(x)
-                }
-              };
-              if (files.isEmpty()) {
-                return writer.setArray(key, oldFiles.toArray())
-              };
-              writer.setArray(key, files.toArray());
-            },
-          );
-      };
-      writer.set(SKStore.IID(0), SpecializerDirFile(specializerAllDir));
-    },
-  );
+            };
 
-  _ = backendPhase1.map(
+            for (dep in deps) {
+              if (phaseNumber == lastPhase) {
+                specializer.requestFunction(
+                  dep.lazyGFun,
+                  dep.methodTargs,
+                  dep.classTargs,
+                );
+                specializer.findAllFunctionsAndSClasses(context);
+              } else {
+                specializer.specializePendingFun(
+                  context,
+                  dep.lazyGFun,
+                  dep.methodTargs,
+                  dep.classTargs,
+                );
+              }
+            };
+
+            specializer.writeDiff(writer);
+            writer.setArray(
+              SKStore.IID(0),
+              remainingDeps
+                .filter(x -> !specializer.funSet.contains(x))
+                .toArray()
+                .concat(specializer.funStack.toArray()),
+            )
+          | _ -> writer.set(key, OldFile(values.collect(Array)))
+          }
+        },
+      )
+      .map(
+        x ~> x,
+        x ~> x,
+        context,
+        SKStore.DirName::create("/specializer/merge/" + phaseNumber + "/"),
+        (_context, writer, key, values) ~> {
+          files = mutable Vector[];
+          oldFiles = mutable Vector[];
+          for (file in values) {
+            file match {
+            | OldFile(x) -> oldFiles.extend(x)
+            | x -> files.push(x)
+            }
+          };
+          if (files.isEmpty()) {
+            return writer.setArray(key, oldFiles.toArray())
+          };
+          writer.setArray(key, files.toArray());
+        },
+      );
+  };
+  specializerDataDir = specializerAllDir;
+  /*
+        writer.set(SKStore.IID(0), SpecializerDirFile(specializerAllDir));
+      },
+    );
+  */
+
+  _ = backendDir.map(
     SKStore.IID::keyType,
-    TickConfigFile::type,
+    ConfigFile::type,
     context,
     SKStore.DirName::create("/backendPhase2/"),
-    (context, _writer, _key, values) ~> {
-      prevPhase = BackendPhase1File::type(values.first);
-      config = prevPhase.conf;
-      tickConfigFile = backendDir.getArray(context, SKStore.IID(0))[0];
-      specializerDataDir = specializerDir.getArray(context, SKStore.IID(0))[
-        0,
-      ].value;
+    (context, _writer, _key, _values) ~> {
+      prevPhase = backendPhase1.getArray(context, SKStore.IID(0))[0];
+      partialConfig = prevPhase.conf;
+      config = backendDir.getArray(context, SKStore.IID(0))[0].value;
       specializer = OuterIstToIR.Specializer::make(
         specializerDataDir,
         context,
-        config,
+        partialConfig,
         converter,
       );
       specializer.toFixed(context);
       specializer.!canCreateNewSClasses = false;
-      debug(("specializer created", tickConfigFile.tick));
+      debug(("specializer created"));
 
       roots = prevPhase.rootsIR;
       env = OuterIstToIR.createIR(context, config, roots, specializer);
@@ -509,13 +513,19 @@ fun compile(
 
   ensureCompatibleLLVMVersion();
 
+  if (config.check) {
+    return void;
+  };
+
+  if (config.emit == "sklib") {
+    compile_sklib(config);
+    return void
+  };
+
   // FIXME: Backend initialization should _not_ peek into the config
   // as it is likely to change across invocations.
-  getOrInitializeBackend(context, config.ptrBitSize).writeArray(
-    context,
-    SKStore.IID(0),
-    Array[TickConfigFile(context.tick.value, config)],
-  );
+  backendDir = getOrInitializeBackend(context, config.ptrBitSize);
+  backendDir.writeArray(context, SKStore.IID(0), Array[ConfigFile(config)]);
 
   FileCache.writeFiles(
     context,

@@ -1224,18 +1224,24 @@ class EagerDir{
     if (context.debugMode) {
       print_string(`REUSING: ${childName}`);
     };
+
     if (!context.toUpdate.isEmpty()) {
       childDir = context.unsafeGetEagerDir(childName);
       for (i in Range(0, childDir.parents.size())) {
         (parentName, _) = childDir.parents[i];
         parentDir = context.unsafeGetEagerDir(parentName);
-        context.!toUpdate = context.toUpdate.set(
-          (
-            Time(-Int::max + childDir.time.value),
-            Time(-Int::max + parentDir.time.value),
-          ),
-          Arrow(parentName, childName),
-        );
+        if (context.toUpdate.containsKey((childDir.time, parentDir.time))) {
+          context.!toUpdate = context.toUpdate.set(
+            (
+              Time(-Int::max + childDir.time.value),
+              Time(-Int::max + parentDir.time.value),
+            ),
+            Arrow(parentName, childName),
+          );
+          context.!toUpdate = context.toUpdate.remove(
+            (childDir.time, parentDir.time),
+          );
+        }
       }
     };
     context.!newDirs = context.newDirs.set(childName);
