@@ -347,7 +347,7 @@ fun getOrInitializeBackend(
   */
   specializerAllDir = specializerInitDir;
 
-  lastPhase = 5;
+  lastPhase = 15;
 
   for (phaseNumber in Range(0, lastPhase + 1)) {
     specializerAllDirCopy = specializerAllDir;
@@ -370,14 +370,6 @@ fun getOrInitializeBackend(
               converter,
             );
 
-            firstDeps = mutable Vector[];
-            remainingDeps = mutable Vector[];
-            for (i in Range(0, deps.size())) {
-              if (i < 100) firstDeps.push(deps[i]) else {
-                remainingDeps.push(deps[i])
-              }
-            };
-
             for (dep in deps) {
               if (phaseNumber == lastPhase) {
                 specializer.requestFunction(
@@ -397,13 +389,7 @@ fun getOrInitializeBackend(
             };
 
             specializer.writeDiff(writer);
-            writer.setArray(
-              SKStore.IID(0),
-              remainingDeps
-                .filter(x -> !specializer.funSet.contains(x))
-                .toArray()
-                .concat(specializer.funStack.toArray()),
-            )
+            writer.setArray(SKStore.IID(0), specializer.funStack.toArray())
           | _ -> writer.set(key, OldFile(values.collect(Array)))
           }
         },

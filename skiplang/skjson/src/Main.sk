@@ -1,8 +1,9 @@
 module SKJSON;
 
 fun main(): void {
-  debug("foo");
+  debug("foo2");
   debug("foo222");
+
   debug("foo2");
   debug("foo");
 
