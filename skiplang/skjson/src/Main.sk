@@ -1,11 +1,13 @@
 module SKJSON;
 
-fun main(): void {
-  debug("foo2");
-  debug("foo222");
+class X(x: Int, y: Int, z: Int)
 
-  debug("foo2");
-  debug("foo");
+fun main(): void {
+  debug("foo3");
+  debug("");
+  debug("foo2223");
+  x = X(1, 2, 3);
+  if (x.x == 22) return void;
 
   saved = SKStore.newObstack();
   cmd = Cli.Command("skjson")
@@ -194,7 +196,8 @@ fun execHelp(args: Cli.ParseResults): void {
     | Some(subcmd) -> print_error(`error: Invalid subcommand ${subcmd}.`)
     | _ -> print_error("error: No subcommand specified.")
     };
-    print_string(Cli.usage(args.cmd, true))
+    debug(12);
+    print_string(Cli.usage(args.cmd, false))
   };
 }
 

@@ -677,7 +677,7 @@ mutable class Specializer{
 
   // Specialized functions we already know we're going to need.
   // Everything in here was pushed on funStack at some point.
-  private mutable funsNeeded: mutable SPMap<GFunKey, GFunKey>,
+  mutable funsNeeded: mutable SPMap<GFunKey, GFunKey>,
 
   // The set of functions present in funStack
   mutable funSet: SortedSet<FStackElement> = SortedSet[],
@@ -1242,22 +1242,31 @@ mutable class Specializer{
   }
 
   // Specializes pending functions. Returns true if anything changed.
-  private mutable fun specializePendingFuns(
+  mutable fun specializePendingFuns(
     context: mutable SKStore.Context,
+    exceptFrontEndFuns: Bool = false,
   ): void {
+    newStack = List[];
     while (!this.funStackIsEmpty()) {
-      this.funStackPop() match {
+      stackElt = this.funStackPop();
+      stackElt match {
       | FStackElement(name, methodTargs, classTargs) ->
-        this.withRegion(context, (context, specializer) ~> {
-          specializer.specializePendingFun(
-            context,
-            name,
-            methodTargs,
-            classTargs,
-          );
-        })
+        name match {
+        | FrontEndLazyGFun _ if (exceptFrontEndFuns) ->
+          !newStack = List.Cons(stackElt, newStack)
+        | _ ->
+          this.withRegion(context, (context, specializer) ~> {
+            specializer.specializePendingFun(
+              context,
+              name,
+              methodTargs,
+              classTargs,
+            );
+          })
+        }
       };
     };
+    this.!funStack = newStack;
   }
 
   mutable fun specializePendingFun(

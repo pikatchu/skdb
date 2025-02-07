@@ -204,7 +204,7 @@ fun reconstructHelper(
     };
     return CJArray(arr.map(x -> x.i1).toArray())
   };
-  throw ReconstructError("JSON is both an object and an array")
+  throw ReconstructError("JSON is both an object and an arrays")
 }
 
 module end;

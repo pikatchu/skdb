@@ -360,7 +360,6 @@ fun getOrInitializeBackend(
         (context, writer, key, values) ~> {
           key match {
           | SKStore.IID _ ->
-            debug(("KK", phaseNumber));
             config = backendDir.getArray(context, SKStore.IID(0))[0].value;
             deps = values.collect(Array).map(OuterIstToIR.FStackElement::type);
             specializer = OuterIstToIR.Specializer::make(
@@ -369,6 +368,8 @@ fun getOrInitializeBackend(
               config,
               converter,
             );
+
+            debug(("KK", phaseNumber, deps.size()));
 
             for (dep in deps) {
               if (phaseNumber == lastPhase) {
@@ -388,9 +389,13 @@ fun getOrInitializeBackend(
               }
             };
 
+            specializer.specializePendingFuns(context, true);
+
             specializer.writeDiff(writer);
             writer.setArray(SKStore.IID(0), specializer.funStack.toArray())
-          | _ -> writer.set(key, OldFile(values.collect(Array)))
+          | _ ->
+            debug(("Propagating", inspect(key).toString().take(100)));
+            writer.set(key, OldFile(values.collect(Array)))
           }
         },
       )
