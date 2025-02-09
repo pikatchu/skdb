@@ -347,7 +347,7 @@ fun getOrInitializeBackend(
   */
   specializerAllDir = specializerInitDir;
 
-  lastPhase = 15;
+  lastPhase = 5;
 
   for (phaseNumber in Range(0, lastPhase + 1)) {
     specializerAllDirCopy = specializerAllDir;
@@ -390,11 +390,24 @@ fun getOrInitializeBackend(
             };
 
             specializer.specializePendingFuns(context, true);
+            for (_ in Range(0, 3)) {
+              funs = specializer.funStack;
+              specializer.!funStack = List[];
+              for (dep in funs) {
+                specializer.specializePendingFun(
+                  context,
+                  dep.lazyGFun,
+                  dep.methodTargs,
+                  dep.classTargs,
+                );
+              }
+            };
+            specializer.specializePendingFuns(context, true);
 
             specializer.writeDiff(writer);
             writer.setArray(SKStore.IID(0), specializer.funStack.toArray())
           | _ ->
-            debug(("Propagating", inspect(key).toString().take(100)));
+            debug(("writing", inspect(key).toString().take(200)));
             writer.set(key, OldFile(values.collect(Array)))
           }
         },

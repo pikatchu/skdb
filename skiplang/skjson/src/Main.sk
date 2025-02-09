@@ -4,7 +4,10 @@ class X(x: Int, y: Int, z: Int)
 
 fun main(): void {
   debug("foo3");
+  debug("a");
+  debug("b");
   debug("");
+  debug("xx");
   debug("foo2223");
   x = X(1, 2, 3);
   if (x.x == 22) return void;
@@ -197,6 +200,8 @@ fun execHelp(args: Cli.ParseResults): void {
     | _ -> print_error("error: No subcommand specified.")
     };
     debug(12);
+    debug(12);
+
     print_string(Cli.usage(args.cmd, false))
   };
 }
