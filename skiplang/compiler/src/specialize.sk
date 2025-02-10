@@ -399,6 +399,7 @@ mutable base class SPMap<K: Orderable, V>{} {
   readonly fun readonlyGet(k: K): V;
   mutable fun get(context: mutable SKStore.Context, k: K): V;
   mutable fun maybeGet(context: mutable SKStore.Context, k: K): ?V;
+  mutable fun contains(context: mutable SKStore.Context, k: K): Bool;
   mutable fun set(k: K, v: V): void;
   mutable fun replace(other: readonly SPMap<K, V>): void;
   readonly fun toFixed(): readonly SPMapFixed<K, V>;
@@ -412,6 +413,10 @@ mutable class SPMapDiff<K: Orderable, V>{
   v2File: V ~> SKStore.File,
   file2V: SKStore.File ~> V,
   mutable handle: SKStore.EHandle<SKStore.Key, SKStore.File>,
+  mutable handlePresence: ?SKStore.EHandle<
+    SKStore.Key,
+    SKStore.BoolFile,
+  > = None(),
   mutable reads: SortedSet<K> = SortedSet[],
   mutable data: SortedMap<K, V> = SortedMap[],
 } extends SPMap<K, V> {
@@ -422,6 +427,7 @@ mutable class SPMapDiff<K: Orderable, V>{
       v2File => this.v2File,
       file2V => this.file2V,
       handle => this.handle,
+      handlePresence => this.handlePresence,
       reads => this.reads,
       data => this.data,
     }
@@ -433,6 +439,7 @@ mutable class SPMapDiff<K: Orderable, V>{
       v2File => this.v2File,
       file2V => this.file2V,
       handle => this.handle,
+      handlePresence => this.handlePresence,
       reads => this.reads,
       data => this.data,
     }
@@ -471,6 +478,19 @@ mutable class SPMapDiff<K: Orderable, V>{
         Some(this.file2V(arr[0]))
       }
     | x @ Some(_) -> x
+    }
+  }
+
+  mutable fun contains(context: mutable SKStore.Context, k: K): Bool {
+    this.!reads = this.reads.set(k);
+    this.data.maybeGet(k) match {
+    | None() ->
+      this.handlePresence match {
+      | None() -> this.handle.getArray(context, this.k2Key(k)).size() != 0
+      | Some(handle) -> handle.getArray(context, this.k2Key(k)).size() != 0
+      }
+
+    | Some(_) -> true
     }
   }
 
@@ -522,6 +542,10 @@ mutable class SPMapFixed<K: Orderable, V>{
 
   mutable fun maybeGet(_context: mutable SKStore.Context, k: K): ?V {
     this.data.maybeGet(k)
+  }
+
+  mutable fun contains(context: mutable SKStore.Context, k: K): Bool {
+    this.maybeGet(context, k) is Some _
   }
 
   mutable fun set(k: K, v: V): void {
@@ -734,6 +758,22 @@ mutable class Specializer{
         v2File => convGFunKey2File,
         file2V => convFile2GFunKey,
         handle,
+        handlePresence => Some(
+          handle.map(
+            x ~> x,
+            SKStore.BoolFile::type,
+            context,
+            SKStore.DirName::create(
+              handle.dirName.toString() + "funsNeededBool/",
+            ),
+            (_context, writer, key, _values) ~> {
+              key match {
+              | GFunKeyKey _ -> writer.set(key, SKStore.BoolFile(true))
+              | _ -> void
+              }
+            },
+          ),
+        ),
       },
     }
   }
@@ -1021,12 +1061,11 @@ mutable class Specializer{
   }
 
   mutable fun funsNeededContains(key: GFunKey): Bool {
-    result = this.funsNeeded.maybeGet(this.context, key) is Some _;
-    result
+    this.funsNeeded.contains(this.context, key)
   }
 
   mutable fun funsNeededSet(key: GFunKey): void {
-    if (this.funsNeeded.maybeGet(this.context, key) is None()) {
+    if (!this.funsNeededContains(key)) {
       this.funsNeeded.set(key, key);
     }
   }
@@ -1244,27 +1283,30 @@ mutable class Specializer{
   // Specializes pending functions. Returns true if anything changed.
   mutable fun specializePendingFuns(
     context: mutable SKStore.Context,
-    exceptFrontEndFuns: Bool = false,
+    filter: FStackElement -> Bool = _ -> true,
   ): void {
     newStack = List[];
     while (!this.funStackIsEmpty()) {
-      stackElt = this.funStackPop();
-      stackElt match {
-      | FStackElement(name, methodTargs, classTargs) ->
-        name match {
-        | FrontEndLazyGFun _ if (exceptFrontEndFuns) ->
-          !newStack = List.Cons(stackElt, newStack)
-        | _ ->
+      stack = this.funStack;
+      this.!funStack = List[];
+      while (stack is List.Cons _) {
+        (!stack, stackElt) = stack match {
+        | List.Nil() -> invariant_violation("Impossible")
+        | List.Cons(hd, tl) -> (tl, hd)
+        };
+        if (filter(stackElt)) {
           this.withRegion(context, (context, specializer) ~> {
             specializer.specializePendingFun(
               context,
-              name,
-              methodTargs,
-              classTargs,
+              stackElt.lazyGFun,
+              stackElt.methodTargs,
+              stackElt.classTargs,
             );
           })
+        } else {
+          !newStack = List.Cons(stackElt, newStack)
         }
-      };
+      }
     };
     this.!funStack = newStack;
   }
