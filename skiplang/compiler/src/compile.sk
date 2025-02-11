@@ -357,7 +357,6 @@ fun getOrInitializeBackend(
     context,
     SKStore.DirName::create("/specializer/"),
     (context, writer, _, _) ~> {
-      _ = tickDir.getArray(context, SKStore.IID(0));
       specializerAllDir = specializerInitDir;
 
       phaseNumber = 0;
@@ -409,9 +408,7 @@ fun getOrInitializeBackend(
                 specializer.writeDiff(writer);
                 writer.setArray(SKStore.IID(0), specializer.funStack.toArray())
               | _ ->
-                if (phaseNumberCopy == 3) {
-                  debug(("Propagating", key));
-                };
+                //                debug(("Propagating", inspect(key).toString().take(100)));
                 writer.set(key, OldFile(values.collect(Array)))
               }
             },
@@ -442,7 +439,7 @@ fun getOrInitializeBackend(
     },
   );
 
-  _ = backendDir.map(
+  backendEmitDir = backendDir.map(
     SKStore.IID::keyType,
     ConfigFile::type,
     context,
@@ -460,6 +457,7 @@ fun getOrInitializeBackend(
         partialConfig,
         converter,
       );
+      specializer.specializePendingFuns(context);
       specializer.toFixed(context);
       specializer.!canCreateNewSClasses = false;
       debug(("specializer created"));
@@ -504,6 +502,13 @@ fun getOrInitializeBackend(
       | _ ->
         invariant_violation("Unsupported value for `--emit`: " + config.emit)
       }
+    },
+  );
+
+  context.setDir(
+    backendEmitDir.dirName,
+    context.unsafeGetEagerDir(backendEmitDir.dirName) with {
+      time => SKStore.Time(Int::max),
     },
   );
 

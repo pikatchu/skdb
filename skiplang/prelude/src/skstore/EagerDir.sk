@@ -1225,25 +1225,6 @@ class EagerDir{
       print_string(`REUSING: ${childName}`);
     };
 
-    if (!context.toUpdate.isEmpty()) {
-      childDir = context.unsafeGetEagerDir(childName);
-      for (i in Range(0, childDir.parents.size())) {
-        (parentName, _) = childDir.parents[i];
-        parentDir = context.unsafeGetEagerDir(parentName);
-        if (context.toUpdate.containsKey((childDir.time, parentDir.time))) {
-          context.!toUpdate = context.toUpdate.set(
-            (
-              Time(-Int::max + childDir.time.value),
-              Time(-Int::max + parentDir.time.value),
-            ),
-            Arrow(parentName, childName),
-          );
-          context.!toUpdate = context.toUpdate.remove(
-            (childDir.time, parentDir.time),
-          );
-        }
-      }
-    };
     context.!newDirs = context.newDirs.set(childName);
   }
 
@@ -1282,7 +1263,6 @@ class EagerDir{
     context.unsafeMaybeGetEagerDir(childName) match {
     | Some(child) ->
       if (static::isReusable(context, child, parents)) {
-        debug(("Reused", childName.toString()));
         static::reuseDir(context, childName);
         return void
       }
@@ -1707,10 +1687,6 @@ class EagerDir{
 
     if (native_eq(rvalues, oldValues) == 0) {
       return this;
-    };
-
-    if (this.dirName.toString().startsWith("/specializer/reduced/")) {
-      debug(("Writing", k, rvalues));
     };
 
     if (context.sourceOverride.isSome()) {

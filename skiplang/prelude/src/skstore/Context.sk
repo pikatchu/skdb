@@ -163,9 +163,6 @@ fun updateDirtyReaders(
     } else {
       (child.getTime(), parent.getTime())
     };
-    if (reader.childName.toString().startsWith("/specializer/reduced/")) {
-      debug(("Read", path));
-    };
 
     arrow = Arrow(reader.parentName, reader.childName);
     context.addToUpdate(time, arrow);
