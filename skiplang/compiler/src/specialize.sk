@@ -1280,6 +1280,25 @@ mutable class Specializer{
     result
   }
 
+  mutable fun specializeOneRoundOfPendingFuns(): void {
+    stack = this.funStack;
+    this.!funStack = List[];
+    while (stack is List.Cons _) {
+      (!stack, stackElt) = stack match {
+      | List.Nil() -> invariant_violation("Impossible")
+      | List.Cons(hd, tl) -> (tl, hd)
+      };
+      this.withRegion(this.context, (context, specializer) ~> {
+        specializer.specializePendingFun(
+          context,
+          stackElt.lazyGFun,
+          stackElt.methodTargs,
+          stackElt.classTargs,
+        );
+      })
+    }
+  }
+
   // Specializes pending functions. Returns true if anything changed.
   mutable fun specializePendingFuns(
     context: mutable SKStore.Context,

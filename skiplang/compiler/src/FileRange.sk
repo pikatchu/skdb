@@ -15,16 +15,16 @@ base class .Pos{
   file: FileCache.InputSource,
   range: TextRange,
 } uses Hashable, Orderable, Show {
-  static fun create(file: FileCache.InputSource, range: TextRange): FileRange {
-    FileRange{file, range}
+  static fun create(file: FileCache.InputSource, _range: TextRange): FileRange {
+    FileRange{
+      file,
+      range => TextRange{start => Position(0), end => Position(0)},
+    }
   }
 
-  static fun fromStartEnd(start: FilePosition, end: FilePosition): FileRange {
+  static fun fromStartEnd(start: FilePosition, _end: FilePosition): FileRange {
     // TODO: invariant(start.file == end.file);
-    FileRange.create(
-      start.file,
-      TextRange.create(start.position, end.position),
-    );
+    FileRange.create(start.file, TextRange.create(Position(0), Position(0)));
   }
 
   fun start(): FilePosition {

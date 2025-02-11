@@ -388,22 +388,36 @@ fun getOrInitializeBackend(
                 stack = values
                   .map(OuterIstToIR.FStackElement::type)
                   .collect(Array);
-                debug(("KK", "left", phaseNumberCopy, stack.size()));
 
+                processed = 0;
                 specializer.!funStack = List::createFromItems(stack);
-                nbrProcessedFuns = 0;
-                specializer.specializePendingFuns(context, stackElt -> {
-                  stackElt match {
-                  | OuterIstToIR.FStackElement(
-                    OuterIstToIR.FrontEndLazyGFun _,
-                    _,
-                    _,
-                  ) ->
-                    !nbrProcessedFuns = nbrProcessedFuns + 1;
-                    nbrProcessedFuns <= 100
-                  | _ -> true
-                  }
-                });
+                while (
+                  specializer.funStack is List.Cons _ &&
+                  processed < 1000
+                ) {
+                  !processed = processed + specializer.funStack.size();
+                  specializer.specializeOneRoundOfPendingFuns();
+                };
+
+                debug(("KK", "left", phaseNumberCopy, processed));
+
+                /*
+
+                                nbrProcessedFuns = 0;
+                                specializer.specializePendingFuns(context, stackElt -> {
+                                  stackElt match {
+                                  | OuterIstToIR.FStackElement(
+                                    OuterIstToIR.FrontEndLazyGFun _,
+                                    _,
+                                    _,
+                                  ) ->
+                                    !nbrProcessedFuns = nbrProcessedFuns + 1;
+                                    nbrProcessedFuns <= 100
+                                  | _ -> true
+                                  }
+                                });
+
+                */
 
                 specializer.writeDiff(writer);
                 writer.setArray(SKStore.IID(0), specializer.funStack.toArray())
