@@ -694,10 +694,10 @@ mutable class Specializer{
   mutable gclassMap: mutable SPMap<GClassName, SortedSet<SClassID>>,
 
   // Maps (FrontEndLazyGClass, GTargs) to SClassID.
-  private mutable sclassMap: mutable SPMap<HalfSClass, SClassID>,
+  mutable sclassMap: mutable SPMap<HalfSClass, SClassID>,
 
   // Maps SClassID.id to information about that class.
-  private mutable sclasses: mutable SPMap<SClassID, SClassInfo>,
+  mutable sclasses: mutable SPMap<SClassID, SClassInfo>,
 
   // Specialized functions we already know we're going to need.
   // Everything in here was pushed on funStack at some point.
@@ -2447,9 +2447,9 @@ mutable class Specializer{
     funToInsts = mutable Vector[];
 
     // First dealing with all the symbols found at initialization time
-    for (key => _ in this.funsNeeded.toFixed().data) {
-      gf = this.converter.getGFunction(context, key.i0);
-      funToInstsMap.getOrAdd(gf, () -> mutable Vector[]).push(key);
+    for (_ => f in this.funsNeeded.toFixed().data) {
+      gf = this.converter.getGFunction(context, f.i0);
+      funToInstsMap.getOrAdd(gf, () -> mutable Vector[]).push(f);
     };
     for (gf => insts in funToInstsMap) {
       funToInsts.push((gf, insts.toArray()));

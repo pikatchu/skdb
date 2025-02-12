@@ -472,24 +472,33 @@ fun getOrInitializeBackend(
         converter,
       );
       specializer.specializePendingFuns(context);
+
       specializer.toFixed(context);
       specializer.!canCreateNewSClasses = false;
       debug(("specializer created"));
 
       roots = prevPhase.rootsIR;
       env = OuterIstToIR.createIR(context, config, roots, specializer);
+      debug("rest of outer");
       !env = createOptimizedFunctions(context, env, config);
+      debug("optims");
       defs = runCompilerPhase("native/create_asm_graph", () -> {
         AsmOutput.createAsmDefGraph(env, config)
       });
+
+      debug("asm graph");
 
       runCompilerPhase("native/merge_asm_graph", () -> {
         AsmOutput.mergeIdenticalAsmDefs(defs, config.debug)
       });
 
+      debug("merged_asm_graph");
+
       runCompilerPhase("native/create_asm_symbols", () -> {
         AsmOutput.assignFinalSymbols(defs)
       });
+
+      debug("symbols");
 
       config.emit match {
       | "llvm-ir" -> compile_llvm_ir(defs, config)
@@ -585,6 +594,8 @@ fun compile_binary(
   runCompilerPhase("native/write_asm_files", () -> {
     AsmOutput.writeOutputFiles(defs, conf.input_files, llFile, conf)
   });
+
+  debug("wrote asm files");
 
   runCompilerPhase("native/link", () -> {
     link(llFile, conf, exports)
