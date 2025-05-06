@@ -17,3 +17,33 @@ fun createFloatArray(size: UInt32): mutable Array<Float> {
 fun createUInt32Array(size: UInt32): mutable Array<UInt32> {
   Array<UInt32>::mfill(size.toInt(), UInt32::truncate(0));
 }
+
+@export("SKIP_createContext")
+fun createContext(): mutable SKStore.Context {
+  mutable SKStore.Context{}
+}
+
+class OCamlKey(value: String) extends SKStore.Key
+class OCamlFile(value: Array<UInt32>) extends SKStore.File
+
+@export("SKIP_createOCamlKey")
+fun createOCamlKey(value: String): OCamlKey {
+  OCamlKey(value)
+}
+
+@export("SKIP_createOCamlFile")
+fun createOCamlFile(value: Array<UInt32>): OCamlFile {
+  OCamlFile(value)
+}
+
+@export("SKIP_createInputOCamlCollection")
+fun createInputOCamlCollection(
+  context: mutable SKStore.Context,
+  dirNameStr: String,
+): SKStore.EHandle<OCamlKey, OCamlFile> {
+  context.mkdir(
+    OCamlKey::keyType,
+    OCamlFile::type,
+    SKStore.DirName::create(dirNameStr),
+  );
+}
