@@ -158,3 +158,103 @@ uint8_t SKIP_Unsafe_array_get_byte(uint8_t* arr, SkipInt index) {
 void SKIP_Unsafe_array_set_byte(uint8_t* arr, SkipInt index, uint8_t value) {
   arr[index] = value;
 }
+
+/*****************************************************************************/
+// Section added for OCaml support
+/*****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+
+// Define delayedCall as a pointer type
+typedef struct {
+  char* dirName;
+  char* key;
+  void* values;
+  void* result;
+} delayedCall_t;
+
+// Dynamic array for delayed calls
+static delayedCall_t* delayedCalls = NULL;
+static size_t delayedCallsCount = 0;
+static size_t delayedCallsCapacity = 0;
+
+#define INITIAL_CAPACITY 16
+
+// Ensure capacity for at least `minCapacity` elements
+static void sk_ensureCapacity(size_t minCapacity) {
+  if (delayedCallsCapacity >= minCapacity) {
+    return;
+  }
+
+  size_t newCapacity = 0;
+  if (delayedCallsCapacity == 0) {
+    newCapacity = INITIAL_CAPACITY;
+  } else {
+    newCapacity = delayedCallsCapacity;
+  }
+
+  while (newCapacity < minCapacity) {
+    newCapacity = newCapacity * 2;
+  }
+
+  delayedCall_t* newArray = sk_malloc(newCapacity * sizeof(delayedCall_t));
+  if (delayedCalls != NULL) {
+    memcpy(newArray, delayedCalls, delayedCallsCount * sizeof(delayedCall_t));
+    sk_free_size(delayedCalls, delayedCallsCapacity * sizeof(delayedCall_t));
+  }
+
+  delayedCalls = newArray;
+  delayedCallsCapacity = newCapacity;
+}
+
+// Add an element to delayedCalls
+void sk_addDelayedCall(delayedCall_t call) {
+  sk_ensureCapacity(delayedCallsCount + 1);
+  delayedCalls[delayedCallsCount++] = call;
+}
+
+size_t sk_getDelayedCallCount() {
+  return delayedCallsCount;
+}
+
+delayedCall_t* sk_getDelayedCall(size_t idx) {
+  return &delayedCalls[idx];
+}
+
+void sk_removeDelayedCall(size_t idx) {
+  delayedCalls[idx] = delayedCalls[--delayedCallsCount];
+}
+
+int strcmp(const char *s1, const char *s2) {
+  while (*s1 && (*s1 == *s2)) {
+    s1++;
+    s2++;
+  }
+  return *(unsigned char *)s1 - *(unsigned char *)s2;
+}
+
+size_t sk_put_first(char* dirName) {
+  size_t insertPos = 0;
+  for (size_t i = 0; i < delayedCallsCount; i++) {
+    if (strcmp(delayedCalls[i].dirName, dirName) == 0) {
+      if (i != insertPos) {
+        // Swap current with the one at insertPos
+        delayedCall_t temp = delayedCalls[i];
+        delayedCalls[i] = delayedCalls[insertPos];
+        delayedCalls[insertPos] = temp;
+      }
+      insertPos++;
+    }
+  }
+  return insertPos;  // Number of matches moved to the beginning
+}
+
+void SKIP_saveDelayedCall(char* dirName, char* key, void* values) {
+  delayedCall_t call;
+  call.dirName = dirName;
+  call.key = key;
+  call.values = values;
+  call.result = NULL;
+  sk_addDelayedCall(call);
+}

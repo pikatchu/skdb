@@ -18,32 +18,97 @@ fun createUInt32Array(size: UInt32): mutable Array<UInt32> {
   Array<UInt32>::mfill(size.toInt(), UInt32::truncate(0));
 }
 
-@export("SKIP_createContext")
+@export("SKIP_createIntArray")
+fun createIntArray(size: Int): mutable Array<Int> {
+  Array<Int>::mfill(size, 0);
+}
+
+module OCaml;
+
+value class Value(Array<UInt32>)
+
+@export("SKIP_ocamlCreateContext")
 fun createContext(): mutable SKStore.Context {
   mutable SKStore.Context{}
 }
 
-class OCamlKey(value: String) extends SKStore.Key
-class OCamlFile(value: Array<UInt32>) extends SKStore.File
+class Key(value: String) extends SKStore.Key
+class File(value: Value) extends SKStore.File
 
-@export("SKIP_createOCamlKey")
-fun createOCamlKey(value: String): OCamlKey {
-  OCamlKey(value)
+@export("SKIP_ocamlCreateDirName")
+fun createDirName(str: String): SKStore.DirName {
+  SKStore.DirName::create(str)
 }
 
-@export("SKIP_createOCamlFile")
-fun createOCamlFile(value: Array<UInt32>): OCamlFile {
-  OCamlFile(value)
-}
-
-@export("SKIP_createInputOCamlCollection")
-fun createInputOCamlCollection(
+@export("SKIP_ocamlCreateInputDir")
+fun createInputDir(
   context: mutable SKStore.Context,
-  dirNameStr: String,
-): SKStore.EHandle<OCamlKey, OCamlFile> {
-  context.mkdir(
-    OCamlKey::keyType,
-    OCamlFile::type,
-    SKStore.DirName::create(dirNameStr),
-  );
+  dirName: SKStore.DirName,
+): void {
+  context.unsafeMaybeGetEagerDir(dirName) match {
+  | None() -> _ = context.mkdir(Key::keyType, File::type, dirName)
+  | Some _ -> void
+  }
 }
+
+@export("SKIP_ocamlWrite")
+fun write(
+  context: mutable SKStore.Context,
+  dirName: SKStore.DirName,
+  key: String,
+  value: Value,
+): void {
+  context
+    .unsafeGetEagerDir(dirName)
+    .writeArray(context, Key(key), Array[File(value)]);
+}
+
+@export("SKIP_ocamlUnsafeGetArray")
+fun unsafeGetArray(
+  context: mutable SKStore.Context,
+  dirName: SKStore.DirName,
+  key: String,
+): Array<Value> {
+  context.unsafeGetEagerDir(dirName).getArrayRaw(Key(key)).map(value -> {
+    value match {
+    | File(v) -> v
+    | _ -> invariant_violation("Unexpected value")
+    }
+  })
+}
+
+@export("SKIP_ocamlArrayValueSize")
+fun arrayValueSize(arr: Array<Value>): Int {
+  arr.size()
+}
+
+@cpp_extern("SKIP_saveDelayedCall")
+native fun saveDelayedCall(
+  dirName: String,
+  key: String,
+  values: Array<Value>,
+): void;
+
+@export("SKIP_ocamlDelayedMap")
+fun delayedMap(
+  context: mutable SKStore.Context,
+  parentDirName: SKStore.DirName,
+  targetDirName: SKStore.DirName,
+): void {
+  handle = SKStore.EHandle(Key::keyType, File::type, parentDirName);
+  _ = handle.map(
+    Key::keyType,
+    File::type,
+    context,
+    targetDirName,
+    (_context, _writer, key, valueIter) ~> {
+      saveDelayedCall(
+        parentDirName.toString(),
+        key.value,
+        valueIter.nonEmptyMap(x -> x.value).toArray(),
+      );
+    },
+  )
+}
+
+module end;
