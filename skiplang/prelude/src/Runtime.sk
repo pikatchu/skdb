@@ -135,6 +135,9 @@ class KeyFiles(key: Key, files: Array<File>)
 @cpp_extern("SKIP_getDelayedCall")
 native fun getDelayedCall(dirName: String, key: String): Array<KeyFiles>;
 
+@cpp_extern("SKIP_getDelayedReads")
+native fun getDelayedReads(dirName: String, key: String): Array<SKStore.Path>;
+
 @export("SKIP_ocamlCreateKeyFiles")
 fun createKeyFiles(key: String, files: Array<File>): KeyFiles {
   KeyFiles(Key(key), files)
@@ -143,6 +146,11 @@ fun createKeyFiles(key: String, files: Array<File>): KeyFiles {
 @export("SKIP_ocamlCreateArrayKeyFiles")
 fun createArrayKeyFiles(size: Int): mutable Array<KeyFiles> {
   Array::mfill(size, KeyFiles(Key(""), Array[]))
+}
+
+@export("SKIP_ocamlContextGetReads")
+fun contextGetReads(context: readonly SKStore.Context): Array<SKStore.Path> {
+  context.reads.toArray()
 }
 
 @export("SKIP_ocamlArrayKeyFilesSize")
@@ -206,10 +214,14 @@ fun map(
     File::type,
     context,
     targetDirName,
-    (_context, writer, key, _valueIter) ~> {
+    (context, writer, key, _valueIter) ~> {
       delayedCall = getDelayedCall(parentDirName.toString(), key.value);
       for (kv in delayedCall) {
         writer.setArray(kv.key, kv.files)
+      };
+      reads = getDelayedReads(parentDirName.toString(), key.value);
+      for (read in reads) {
+        context.addDep(read);
       }
     },
   )

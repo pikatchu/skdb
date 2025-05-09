@@ -172,6 +172,7 @@ typedef struct {
   char* key;
   void* values;
   void* result;
+  void* reads;
 } delayedCall_t;
 
 // Dynamic array for delayed calls
@@ -222,7 +223,8 @@ void sk_freeDelayedCalls() {
 // Add an element to delayedCalls
 void sk_addDelayedCall(delayedCall_t call) {
   sk_ensureCapacity(delayedCallsCount + 1);
-  delayedCalls[delayedCallsCount++] = call;
+  delayedCalls[delayedCallsCount] = call;
+  delayedCallsCount++;
 }
 
 size_t sk_getDelayedCallCount() {
@@ -231,10 +233,6 @@ size_t sk_getDelayedCallCount() {
 
 delayedCall_t* sk_getDelayedCall(size_t idx) {
   return &delayedCalls[idx];
-}
-
-void sk_removeDelayedCall(size_t idx) {
-  delayedCalls[idx] = delayedCalls[--delayedCallsCount];
 }
 
 static int strcmp(const char *s1, const char *s2) {
@@ -302,13 +300,23 @@ static long binarySearchDelayedCalls(
 
 void* SKIP_getDelayedCall(char* dirName, char* key) {
   long index = binarySearchDelayedCalls(delayedCallsSortedSize, key);
-  printf("Searching for key: %s\n", key);
   if (index == -1) {
     SKIP_throw(NULL);
   }
   if (strcmp(delayedCalls[index].dirName, dirName) != 0) {
     SKIP_throw(NULL);
   }
-  printf("INDEX %ld %p\n", index, delayedCalls[index].result);
   return delayedCalls[index].result;
 }
+
+void* SKIP_getDelayedReads(char* dirName, char* key) {
+  long index = binarySearchDelayedCalls(delayedCallsSortedSize, key);
+  if (index == -1) {
+    SKIP_throw(NULL);
+  }
+  if (strcmp(delayedCalls[index].dirName, dirName) != 0) {
+    SKIP_throw(NULL);
+  }
+  return delayedCalls[index].reads;
+}
+
