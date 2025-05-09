@@ -25,7 +25,10 @@ fun createIntArray(size: Int): mutable Array<Int> {
 
 module OCaml;
 
-value class Value(Array<UInt32>)
+value class Memory(Array<UInt32>)
+value class OCamlRoot(Int)
+
+base class Ptr
 
 @export("SKIP_ocamlCreateContext")
 fun createContext(): mutable SKStore.Context {
@@ -33,7 +36,17 @@ fun createContext(): mutable SKStore.Context {
 }
 
 class Key(value: String) extends SKStore.Key
-class File(value: Value) extends SKStore.File
+class File(mem: Memory, root: OCamlRoot) extends SKStore.File
+
+@export("SKIP_ocamlCreateFile")
+fun createFile(value: Memory, root: OCamlRoot): File {
+  File(value, root)
+}
+
+@export("SKIP_ocamlGetRoot")
+fun getRoot(file: File): OCamlRoot {
+  file.root
+}
 
 @export("SKIP_ocamlCreateDirName")
 fun createDirName(str: String): SKStore.DirName {
@@ -56,11 +69,16 @@ fun write(
   context: mutable SKStore.Context,
   dirName: SKStore.DirName,
   key: String,
-  value: Value,
+  value: File,
 ): void {
   context
     .unsafeGetEagerDir(dirName)
-    .writeArray(context, Key(key), Array[File(value)]);
+    .writeArray(context, Key(key), Array[value]);
+}
+
+@export("SKIP_ocamlArrayFileSize")
+fun arrayFileSize(arr: Array<File>): Int {
+  arr.size()
 }
 
 @export("SKIP_ocamlUnsafeGetArray")
@@ -68,25 +86,20 @@ fun unsafeGetArray(
   context: mutable SKStore.Context,
   dirName: SKStore.DirName,
   key: String,
-): Array<Value> {
+): Array<File> {
   context.unsafeGetEagerDir(dirName).getArrayRaw(Key(key)).map(value -> {
     value match {
-    | File(v) -> v
+    | v @ File _ -> v
     | _ -> invariant_violation("Unexpected value")
     }
   })
-}
-
-@export("SKIP_ocamlArrayValueSize")
-fun arrayValueSize(arr: Array<Value>): Int {
-  arr.size()
 }
 
 @cpp_extern("SKIP_saveDelayedCall")
 native fun saveDelayedCall(
   dirName: String,
   key: String,
-  values: Array<Value>,
+  values: Array<File>,
 ): void;
 
 @export("SKIP_ocamlDelayedMap")
@@ -102,11 +115,102 @@ fun delayedMap(
     context,
     targetDirName,
     (_context, _writer, key, valueIter) ~> {
-      saveDelayedCall(
-        parentDirName.toString(),
-        key.value,
-        valueIter.nonEmptyMap(x -> x.value).toArray(),
-      );
+      saveDelayedCall(parentDirName.toString(), key.value, valueIter.toArray());
+    },
+  )
+}
+
+@export("SKIP_ocamlCreateArrayFile")
+fun createArrayFile(size: Int): mutable Array<File> {
+  Array::mfill(size, File(Memory(Array[]), OCamlRoot(0)))
+}
+
+@export("SKIP_ocamlSetArrayFile")
+fun setArrayFile(array: mutable Array<File>, idx: Int, file: File): void {
+  array![idx] = file;
+}
+
+class KeyFiles(key: Key, files: Array<File>)
+
+@cpp_extern("SKIP_getDelayedCall")
+native fun getDelayedCall(dirName: String, key: String): Array<KeyFiles>;
+
+@export("SKIP_ocamlCreateKeyFiles")
+fun createKeyFiles(key: String, files: Array<File>): KeyFiles {
+  KeyFiles(Key(key), files)
+}
+
+@export("SKIP_ocamlCreateArrayKeyFiles")
+fun createArrayKeyFiles(size: Int): mutable Array<KeyFiles> {
+  Array::mfill(size, KeyFiles(Key(""), Array[]))
+}
+
+@export("SKIP_ocamlArrayKeyFilesSize")
+fun arrayKeyFilesSize(arr: Array<KeyFiles>): Int {
+  arr.size()
+}
+
+@export("SKIP_ocamlArrayKeyFilesGet")
+fun arrayKeyFilesGet(arr: Array<KeyFiles>, idx: Int): KeyFiles {
+  arr[idx]
+}
+
+@export("SKIP_ocamlKeyFilesGetKey")
+fun keyFilesGetKey(keyFiles: KeyFiles): Key {
+  keyFiles.key
+}
+
+@export("SKIP_ocamlKeyFilesGetFiles")
+fun keyFilesGetFiles(keyFiles: KeyFiles): Array<File> {
+  keyFiles.files
+}
+
+@export("SKIP_ocamlSetArrayKeyFiles")
+fun setArrayKeyFiles(
+  array: mutable Array<KeyFiles>,
+  idx: Int,
+  file: KeyFiles,
+): void {
+  array![idx] = file;
+}
+
+@export("SKIP_ocamlDebugArrayKeyFiles")
+fun debugArrayKeyFiles(arr: Array<KeyFiles>): void {
+  debug(arr);
+}
+
+@export("SKIP_ocamlDebugKeyFiles")
+fun debugKeyFiles(v: KeyFiles): void {
+  debug(v);
+}
+
+@export("SKIP_ocamlDebugArrayFiles")
+fun debugFiles(v: Array<File>): void {
+  debug(v);
+}
+
+@export("SKIP_ocamlDebugFile")
+fun debugFile(v: File): void {
+  debug(v);
+}
+
+@export("SKIP_ocamlMap")
+fun map(
+  context: mutable SKStore.Context,
+  parentDirName: SKStore.DirName,
+  targetDirName: SKStore.DirName,
+): void {
+  handle = SKStore.EHandle(Key::keyType, File::type, parentDirName);
+  _ = handle.map(
+    Key::keyType,
+    File::type,
+    context,
+    targetDirName,
+    (_context, writer, key, _valueIter) ~> {
+      delayedCall = getDelayedCall(parentDirName.toString(), key.value);
+      for (kv in delayedCall) {
+        writer.setArray(kv.key, kv.files)
+      }
     },
   )
 }
