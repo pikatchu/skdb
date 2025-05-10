@@ -243,7 +243,7 @@ void sk_finishDelayedCall(size_t index) {
   delayedCalls[index] = delayedCalls[delayedCallsCount];
 }
 
-size_t sk_getDelayedCallCount() {
+size_t sk_getDelayedCallsCount() {
   return delayedCallsCount;
 }
 
