@@ -219,15 +219,6 @@ static void sk_ensureCapacity(size_t minCapacity) {
   delayedCallsCapacity = newCapacity;
 }
 
-void sk_freeDelayedCalls() {
-  sk_global_lock();
-  if (delayedCalls != NULL) {
-    sk_pfree_size(delayedCalls, delayedCallsCapacity * sizeof(delayedCall_t));
-    sk_pfree_size(delayedCallsFinished, delayedCallsCapacity * sizeof(delayedCall_t));
-  }
-  sk_global_unlock();
-}
-
 // Add an element to delayedCalls
 void sk_addDelayedCall(delayedCall_t call) {
   sk_ensureCapacity(delayedCallsCount + 1);
