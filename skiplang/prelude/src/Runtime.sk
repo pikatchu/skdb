@@ -44,6 +44,11 @@ fun cloneContext(context: SKStore.Context): mutable SKStore.Context {
 class Key(value: String) extends SKStore.Key
 class File(mem: Memory, root: OCamlRoot) extends SKStore.File
 
+@export("SKIP_ocamlGetDummyFile")
+fun getDummyFile(): File {
+  File(Memory(Array[]), OCamlRoot(0))
+}
+
 @export("SKIP_ocamlCreateFile")
 fun createFile(value: Memory, root: OCamlRoot): File {
   File(value, root)
@@ -102,11 +107,7 @@ fun unsafeGetArray(
 }
 
 @cpp_extern("SKIP_saveDelayedCall")
-native fun saveDelayedCall(
-  dirName: String,
-  key: String,
-  values: Array<File>,
-): void;
+native fun saveDelayedCall(dirName: String, key: String): void;
 
 @export("SKIP_ocamlDelayedMap")
 fun delayedMap(
@@ -122,12 +123,8 @@ fun delayedMap(
       File::type,
       context,
       targetDirName,
-      (_context, _writer, key, valueIter) ~> {
-        saveDelayedCall(
-          parentDirName.toString(),
-          key.value,
-          valueIter.toArray(),
-        );
+      (_context, _writer, key, _valueIter) ~> {
+        saveDelayedCall(parentDirName.toString(), key.value);
       },
     );
     0

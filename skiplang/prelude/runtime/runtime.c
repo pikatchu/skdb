@@ -167,7 +167,6 @@ void SKIP_Unsafe_array_set_byte(uint8_t* arr, SkipInt index, uint8_t value) {
 typedef struct {
   char* dirName;
   char* key;
-  void* values;
   void* result;
   void* reads;
 } delayedCall_t;
@@ -267,11 +266,21 @@ delayedCall_t* sk_getDelayedCalls() {
   return delayedCalls;
 }
 
-void SKIP_saveDelayedCall(char* dirName, char* key, void* values) {
+extern int64_t SKIP_ocamlArrayFileSize(void*);
+
+void SKIP_saveDelayedCall(char* dirName, char* key) {
   delayedCall_t call;
-  call.dirName = dirName;
-  call.key = key;
-  call.values = values;
+
+  uint32_t size = SKIP_String_byteSize(dirName);
+  call.dirName = sk_malloc(size + 1);
+  memcpy(call.dirName, dirName, size);
+  call.dirName[size] = 0;
+
+  size = SKIP_String_byteSize(key);
+  call.key = sk_malloc(size + 1);
+  memcpy(call.key, key, size);
+  call.key[size] = 0;
+
   call.result = NULL;
   sk_addDelayedCall(call);
 }
@@ -291,7 +300,7 @@ static long binarySearchDelayedCalls(
     size_t mid = left + (right - left) / 2;
     int cmp = strcmp(delayedCalls[mid].key, key);
     if (cmp == 0) {
-      return (int)mid;
+      return (long)mid;
     } else if (cmp < 0) {
       left = mid + 1;
     } else {
