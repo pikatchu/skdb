@@ -28,8 +28,6 @@ module OCaml;
 value class Memory(Array<UInt32>)
 value class OCamlRoot(Int)
 
-base class Ptr
-
 @export("SKIP_ocamlCreateContext")
 fun createContext(): SKStore.Context {
   if (SKStore.gHasContext() == 0) {
@@ -115,17 +113,26 @@ fun delayedMap(
   context: mutable SKStore.Context,
   parentDirName: SKStore.DirName,
   targetDirName: SKStore.DirName,
-): void {
-  handle = SKStore.EHandle(Key::keyType, File::type, parentDirName);
-  _ = handle.map(
-    Key::keyType,
-    File::type,
-    context,
-    targetDirName,
-    (_context, _writer, key, valueIter) ~> {
-      saveDelayedCall(parentDirName.toString(), key.value, valueIter.toArray());
-    },
-  )
+): Int {
+  context.unsafeMaybeGetEagerDir(targetDirName) match {
+  | None() ->
+    handle = SKStore.EHandle(Key::keyType, File::type, parentDirName);
+    _ = handle.map(
+      Key::keyType,
+      File::type,
+      context,
+      targetDirName,
+      (_context, _writer, key, valueIter) ~> {
+        saveDelayedCall(
+          parentDirName.toString(),
+          key.value,
+          valueIter.toArray(),
+        );
+      },
+    );
+    0
+  | Some _ -> 1
+  }
 }
 
 @export("SKIP_ocamlCreateArrayFile")
@@ -215,24 +222,29 @@ fun map(
   context: mutable SKStore.Context,
   parentDirName: SKStore.DirName,
   targetDirName: SKStore.DirName,
-): void {
-  handle = SKStore.EHandle(Key::keyType, File::type, parentDirName);
-  _ = handle.map(
-    Key::keyType,
-    File::type,
-    context,
-    targetDirName,
-    (context, writer, key, _valueIter) ~> {
-      delayedCall = getDelayedCall(parentDirName.toString(), key.value);
-      for (kv in delayedCall) {
-        writer.setArray(kv.key, kv.files)
-      };
-      reads = getDelayedReads(parentDirName.toString(), key.value);
-      for (read in reads) {
-        context.addDep(read);
-      }
-    },
-  )
+): Int {
+  context.unsafeMaybeGetEagerDir(targetDirName) match {
+  | None() ->
+    handle = SKStore.EHandle(Key::keyType, File::type, parentDirName);
+    _ = handle.map(
+      Key::keyType,
+      File::type,
+      context,
+      targetDirName,
+      (context, writer, key, _valueIter) ~> {
+        delayedCall = getDelayedCall(parentDirName.toString(), key.value);
+        for (kv in delayedCall) {
+          writer.setArray(kv.key, kv.files)
+        };
+        reads = getDelayedReads(parentDirName.toString(), key.value);
+        for (read in reads) {
+          context.addDep(read);
+        }
+      },
+    );
+    0
+  | Some _ -> 1
+  }
 }
 
 @export("SKIP_ocamlSync")
@@ -246,6 +258,23 @@ fun sync(context: SKStore.Context, newContext: SKStore.Context): void {
     None(),
   );
   SKStore.gUnsafeFree(context);
+}
+
+@export("SKIP_ocamlUpdate")
+fun update(context: mutable SKStore.Context): void {
+  context.update();
+}
+
+@export("SKIP_ocamlDirty")
+fun dirty(
+  context: mutable SKStore.Context,
+  dirName: SKStore.DirName,
+  key: String,
+): void {
+  context.!dirty = List.Cons(
+    SKStore.Path::create(dirName, Key(key)),
+    context.dirty,
+  );
 }
 
 module end;
