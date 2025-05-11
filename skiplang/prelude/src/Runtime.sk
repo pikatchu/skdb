@@ -31,8 +31,16 @@ value class OCamlRoot(Int)
 base class Ptr
 
 @export("SKIP_ocamlCreateContext")
-fun createContext(): mutable SKStore.Context {
-  mutable SKStore.Context{}
+fun createContext(): SKStore.Context {
+  if (SKStore.gHasContext() == 0) {
+    SKStore.gContextInit(SKStore.Context{});
+  };
+  SKStore.gUnsafeContextGet()
+}
+
+@export("SKIP_ocamlMCloneContext")
+fun cloneContext(context: SKStore.Context): mutable SKStore.Context {
+  context.mclone()
 }
 
 class Key(value: String) extends SKStore.Key
@@ -225,6 +233,19 @@ fun map(
       }
     },
   )
+}
+
+@export("SKIP_ocamlSync")
+fun sync(context: SKStore.Context, newContext: SKStore.Context): void {
+  !context = SKStore.gContextSync(
+    context.tick,
+    context,
+    newContext,
+    None(),
+    UInt32::truncate(0),
+    None(),
+  );
+  SKStore.gUnsafeFree(context);
 }
 
 module end;

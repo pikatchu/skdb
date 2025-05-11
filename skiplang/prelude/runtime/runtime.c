@@ -163,9 +163,6 @@ void SKIP_Unsafe_array_set_byte(uint8_t* arr, SkipInt index, uint8_t value) {
 // Section added for OCaml support
 /*****************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
-
 // Define delayedCall as a pointer type
 typedef struct {
   char* dirName;
