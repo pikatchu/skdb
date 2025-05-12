@@ -268,7 +268,28 @@ delayedCall_t* sk_getDelayedCalls() {
 
 extern int64_t SKIP_ocamlArrayFileSize(void*);
 
+
+static int mapping_mode = 0;
+
+void sk_mapping_mode_on() {
+  printf("Mapping mode: ON\n");
+  mapping_mode = 1;
+}
+
+void sk_mapping_mode_off() {
+  printf("Mapping mode: OFF\n");
+  mapping_mode = 0;
+}
+
+SkipInt SKIP_isMappingMode() {
+  return (SkipInt)mapping_mode;
+}
+
 void SKIP_saveDelayedCall(char* dirName, char* key) {
+  if(mapping_mode) {
+    return;
+  }
+
   delayedCall_t call;
 
   uint32_t size = SKIP_String_byteSize(dirName);
@@ -314,9 +335,14 @@ static long binarySearchDelayedCalls(
 void* SKIP_getDelayedCall(char* dirName, char* key) {
   long index = binarySearchDelayedCalls(delayedCallsSortedSize, key);
   if (index == -1) {
+    fprintf(stderr, "Internal error: delayed call not found\n");
+    fprintf(stderr, "For key: %s %s\n", dirName, key);
+    fprintf(stderr, "Sorted size: %ld\n", delayedCallsSortedSize);
     SKIP_throw(NULL);
   }
   if (strcmp(delayedCalls[index].dirName, dirName) != 0) {
+    fprintf(stderr, "Internal error: delayed call does not match\n");
+    fprintf(stderr, "Found %s %s\n", delayedCalls[index].dirName, dirName);
     SKIP_throw(NULL);
   }
   return delayedCalls[index].result;
@@ -325,11 +351,12 @@ void* SKIP_getDelayedCall(char* dirName, char* key) {
 void* SKIP_getDelayedReads(char* dirName, char* key) {
   long index = binarySearchDelayedCalls(delayedCallsSortedSize, key);
   if (index == -1) {
+    fprintf(stderr, "Internal error: delayed read not found\n");
     SKIP_throw(NULL);
   }
   if (strcmp(delayedCalls[index].dirName, dirName) != 0) {
+    fprintf(stderr, "Internal error: delayed read does not match\n");
     SKIP_throw(NULL);
   }
   return delayedCalls[index].reads;
 }
-

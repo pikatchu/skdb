@@ -664,7 +664,7 @@ int sk_is_nofile_mode() {
 
 extern SKIP_gc_type_t* epointer_ty;
 
-void init_external_pointers() {
+void sk_init_external_pointers() {
   char* obj = sk_get_external_pointer();
   epointer_ty = get_gc_type(obj);
 }
@@ -695,7 +695,7 @@ void SKIP_memory_init(int argc, char** argv) {
   }
 #endif  // __APPLE__
 
-  init_external_pointers();
+  sk_init_external_pointers();
 }
 
 /*****************************************************************************/

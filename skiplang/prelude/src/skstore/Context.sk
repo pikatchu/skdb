@@ -788,6 +788,69 @@ mutable class Context{
     }
   }
 
+  mutable fun updateDir(dirNameStr: String): void {
+    _ = this.timeStamp();
+
+    dirty = mutable Map<DirName, SortedSet<Key>>[];
+    dirtyReaders = mutable Map<DirName, mutable Map<DirName, SortedSet<Key>>>[];
+
+    for (path in this.dirty) {
+      dirty.maybeGet(path.dirName) match {
+      | None() ->
+        set = SortedSet[path.baseName];
+        dirty![path.dirName] = set
+      | Some(set) -> dirty![path.dirName] = set.set(path.baseName)
+      };
+    };
+    for (reader in this.dirtyReaders) {
+      if (!dirtyReaders.containsKey(reader.parentName)) {
+        dirtyReaders![reader.parentName] = mutable Map[];
+      };
+
+      if (!dirtyReaders[reader.parentName].containsKey(reader.childName)) {
+        dirtyReaders[reader.parentName]![reader.childName] = SortedSet[];
+      };
+      dirtyReaders[reader.parentName]![reader.childName] = dirtyReaders[
+        reader.parentName,
+      ][reader.childName].set(reader.key);
+    };
+
+    toUpdate: ?((TimeStack, Time), Arrow) = None();
+    for (time => arrow in this.toUpdate) {
+      if (arrow.childName.toString() == dirNameStr) {
+        !toUpdate = Some((time, arrow));
+      }
+    };
+    toUpdate match {
+    | None() ->
+      this.!tick = this.tick.next();
+      void
+    | Some((time, Arrow(parentName, childName))) ->
+      this.!toReset = this.toReset.set(childName);
+      this.!toUpdate = this.toUpdate.remove(time);
+      this.unsafeMaybeGetDir(childName) match {
+      | None()
+      | Some(DeletedDir _) ->
+        void
+      | Some(LazyDir _) -> invariant_violation("Cannot update lazy dir")
+      | Some(child @ EagerDir _) ->
+        this.!toReset = this.toReset.set(parentName);
+        parentMaps = child.parents.maybeGet(parentName) match {
+        | None() -> invariant_violation("Could not find parent")
+        | Some(f) -> f
+        };
+        EagerDir::update(
+          this,
+          dirty,
+          dirtyReaders,
+          parentName,
+          parentMaps,
+          child,
+        )
+      }
+    }
+  }
+
   private mutable fun perform(list: List<Postponable>): void {
     list match {
     | List.Nil() -> void

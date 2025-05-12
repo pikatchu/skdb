@@ -37,8 +37,21 @@ fun createContext(): SKStore.Context {
 }
 
 @export("SKIP_ocamlMCloneContext")
-fun cloneContext(context: SKStore.Context): mutable SKStore.Context {
+fun mcloneContext(context: readonly SKStore.Context): mutable SKStore.Context {
   context.mclone()
+}
+
+@export("SKIP_ocamlCloneContext")
+fun cloneContext(context: readonly SKStore.Context): SKStore.Context {
+  context.clone()
+}
+
+@export("SKIP_ocamlReplaceContext")
+fun replaceContext(
+  context: mutable SKStore.Context,
+  saved: SKStore.Context,
+): void {
+  context.replaceFromSaved(saved);
 }
 
 class Key(value: String) extends SKStore.Key
@@ -123,8 +136,10 @@ fun delayedMap(
       File::type,
       context,
       targetDirName,
-      (_context, _writer, key, _valueIter) ~> {
-        saveDelayedCall(parentDirName.toString(), key.value);
+      (_context, writer, key, valueIter) ~> {
+        debug(("PMAP", targetDirName.toString(), key));
+        saveDelayedCall(targetDirName.toString(), key.value);
+        writer.setArray(key, valueIter.toArray())
       },
     );
     0
@@ -142,7 +157,7 @@ fun setArrayFile(array: mutable Array<File>, idx: Int, file: File): void {
   array![idx] = file;
 }
 
-class KeyFiles(key: Key, files: Array<File>)
+class KeyFiles(key: Key, files: Array<File>) extends SKStore.File
 
 @cpp_extern("SKIP_getDelayedCall")
 native fun getDelayedCall(dirName: String, key: String): Array<KeyFiles>;
@@ -229,6 +244,7 @@ fun map(
       context,
       targetDirName,
       (context, writer, key, _valueIter) ~> {
+        debug(("MAP", targetDirName.toString(), key));
         delayedCall = getDelayedCall(parentDirName.toString(), key.value);
         for (kv in delayedCall) {
           writer.setArray(kv.key, kv.files)
@@ -258,20 +274,8 @@ fun sync(context: SKStore.Context, newContext: SKStore.Context): void {
 }
 
 @export("SKIP_ocamlUpdate")
-fun update(context: mutable SKStore.Context): void {
-  context.update();
-}
-
-@export("SKIP_ocamlDirty")
-fun dirty(
-  context: mutable SKStore.Context,
-  dirName: SKStore.DirName,
-  key: String,
-): void {
-  context.!dirty = List.Cons(
-    SKStore.Path::create(dirName, Key(key)),
-    context.dirty,
-  );
+fun update(context: mutable SKStore.Context, dirName: String): void {
+  context.updateDir(dirName);
 }
 
 module end;
