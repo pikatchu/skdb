@@ -1540,7 +1540,7 @@ class EagerDir protected {
     }
   }
 
-  private fun getArraySourceKey(source: Path, key: Key): Array<File> {
+  fun getArraySourceKey(source: Path, key: Key): Array<File> {
     this.data.maybeGet(key) match {
     | None() -> this.fixedData.data.getArraySourceKey(source, key).flatten()
     | Some(modified) ->

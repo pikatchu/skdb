@@ -360,3 +360,7 @@ void* SKIP_getDelayedReads(char* dirName, char* key) {
   }
   return delayedCalls[index].reads;
 }
+
+void* SKIP_ocamlUnsafeCastFiles(void* obj) {
+  return obj;
+}

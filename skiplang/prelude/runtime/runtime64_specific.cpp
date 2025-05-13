@@ -638,3 +638,175 @@ void SKIP_js_delete_fun() {
   // Not implemented
 }
 }
+
+
+/*****************************************************************************/
+// OCAML comparison
+/*****************************************************************************/
+
+// --- Minimal OCaml layout ---
+typedef uintptr_t value;
+typedef uint64_t header_t;
+typedef uint8_t tag_t;
+typedef uint32_t mlsize_t;
+
+#define Is_long(x)   (((value)(x) & 1) != 0)
+#define Wosize_hd(hd) ((mlsize_t)((hd) >> 10))
+#define Tag_hd(hd)    ((tag_t)((hd) & 0xFF))
+#define Hd_val(v)    (((header_t*)v)[-1])
+#define Wosize_val(v) Wosize_hd(Hd_val(v))
+#define Tag_val(v)    Tag_hd(Hd_val(v))
+#define Field(v, i)   (((value*)(v))[i])
+
+#define String_tag 252
+#define Double_tag 253
+#define Double_array_tag 254
+#define Abstract_tag 251
+#define Custom_tag 250
+
+// --- Pair stack ---
+typedef struct Pair {
+  void* a;
+  void* b;
+} Pair;
+
+typedef struct PairList {
+  Pair* data;
+  size_t size;
+  size_t capacity;
+} PairList;
+
+void init_pair_list(PairList* list) {
+  list->size = 0;
+  list->capacity = 16;
+  list->data = (Pair*)malloc(sizeof(Pair) * list->capacity);
+}
+
+void push_pair(PairList* list, void* a, void* b) {
+  if (list->size == list->capacity) {
+    list->capacity *= 2;
+    list->data = (Pair*)realloc(list->data, sizeof(Pair) * list->capacity);
+  }
+  list->data[list->size++] = (Pair){a, b};
+}
+
+int pop_pair(PairList* list, void** a, void** b) {
+  if (list->size == 0) return 0;
+  Pair p = list->data[--list->size];
+  *a = p.a;
+  *b = p.b;
+  return 1;
+}
+
+void free_pair_list(PairList* list) {
+  free(list->data);
+}
+
+// --- Visited map using unordered_map ---
+#include <unordered_map>
+
+struct AddrPair {
+  void* a;
+  void* b;
+
+  bool operator==(const AddrPair& other) const {
+    return a == other.a && b == other.b;
+  }
+};
+
+namespace std {
+template<>
+struct hash<AddrPair> {
+  std::size_t operator()(const AddrPair& k) const {
+    return std::hash<void*>()(k.a) ^ std::hash<void*>()(k.b);
+  }
+};
+}
+
+typedef std::unordered_map<AddrPair, bool> VisitedMap;
+
+int ocaml_structural_equal(value a, value b) {
+  if (a == b) {
+    return 1;
+  }
+
+  if (Is_long(a) || Is_long(b)) return 0;
+
+  PairList stack;
+  init_pair_list(&stack);
+  VisitedMap visited;
+
+  push_pair(&stack, (void*)a, (void*)b);
+
+  void *pa, *pb;
+  while (pop_pair(&stack, &pa, &pb)) {
+    value va = (value)pa;
+    value vb = (value)pb;
+
+    if (va == vb) continue;
+    if (Is_long(va) || Is_long(vb)) {
+      free_pair_list(&stack);
+      return 0;
+    }
+
+    AddrPair key = {pa, pb};
+    if (visited.find(key) != visited.end()) continue;
+    visited[key] = true;
+
+    tag_t taga = Tag_val(va);
+    tag_t tagb = Tag_val(vb);
+    if (taga != tagb) {
+      free_pair_list(&stack);
+      return 0;
+    }
+
+    mlsize_t sizea = Wosize_val(va);
+    mlsize_t sizeb = Wosize_val(vb);
+    if (sizea != sizeb) {
+      free_pair_list(&stack);
+      return 0;
+    }
+
+    if (taga == String_tag) {
+      char* sa = (char*)va;
+      char* sb = (char*)vb;
+      if (memcmp(sa, sb, sizea * sizeof(value)) != 0) {
+        free_pair_list(&stack);
+        return 0;
+      }
+    } else if (taga == Double_tag) {
+      double* da = (double*)va;
+      double* db = (double*)vb;
+      if (*da != *db) {
+        free_pair_list(&stack);
+        return 0;
+      }
+    } else if (taga == Double_array_tag) {
+      double* da = (double*)va;
+      double* db = (double*)vb;
+      for (mlsize_t i = 0; i < sizea; i++) {
+        if (da[i] != db[i]) {
+          free_pair_list(&stack);
+          return 0;
+        }
+      }
+    } else if (taga == Abstract_tag || taga == Custom_tag) {
+      free_pair_list(&stack);
+      return 0;  // Cannot compare
+    } else {
+      for (mlsize_t i = 0; i < sizea; i++) {
+        push_pair(&stack, (void*)Field(va, i), (void*)Field(vb, i));
+      }
+    }
+  }
+
+  free_pair_list(&stack);
+  return 1;
+}
+
+extern "C" {
+SkipInt SKIP_ocamlCompareValues(value a, value b) {
+  SkipInt result = (SkipInt)!ocaml_structural_equal(a, b);
+  return result;
+}
+}

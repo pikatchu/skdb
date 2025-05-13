@@ -229,32 +229,73 @@ fun debugFile(v: File): void {
   debug(v);
 }
 
+@cpp_extern("SKIP_ocamlCompareValues")
+native fun ocamlCompareValues(v1: OCamlRoot, v2: OCamlRoot): Int;
+
+@cpp_extern("SKIP_ocamlUnsafeCastFiles")
+native fun unsafeCastFiles(v: Array<SKStore.File>): Array<File>;
+
 @export("SKIP_ocamlMap")
 fun map(
   context: mutable SKStore.Context,
   parentDirName: SKStore.DirName,
   targetDirName: SKStore.DirName,
+  dedupDirName: SKStore.DirName,
 ): Int {
   context.unsafeMaybeGetEagerDir(targetDirName) match {
   | None() ->
     handle = SKStore.EHandle(Key::keyType, File::type, parentDirName);
-    _ = handle.map(
-      Key::keyType,
-      File::type,
-      context,
-      targetDirName,
-      (context, writer, key, _valueIter) ~> {
-        debug(("MAP", targetDirName.toString(), key));
-        delayedCall = getDelayedCall(parentDirName.toString(), key.value);
-        for (kv in delayedCall) {
-          writer.setArray(kv.key, kv.files)
-        };
-        reads = getDelayedReads(parentDirName.toString(), key.value);
-        for (read in reads) {
-          context.addDep(read);
-        }
-      },
-    );
+    _ = handle
+      .map(
+        Key::keyType,
+        File::type,
+        context,
+        targetDirName,
+        (context, writer, key, _valueIter) ~> {
+          delayedCall = getDelayedCall(parentDirName.toString(), key.value);
+          reads = getDelayedReads(parentDirName.toString(), key.value);
+          for (read in reads) {
+            context.addDep(read);
+          };
+          for (kv in delayedCall) {
+            writer.setArray(kv.key, kv.files)
+          }
+        },
+      )
+      .map(
+        Key::keyType,
+        File::type,
+        context,
+        dedupDirName,
+        (context, writer, key, valueIter) ~> {
+          values = valueIter.toArray();
+          context.unsafeMaybeGetEagerDir(dedupDirName) match {
+          | None() -> writer.setArray(key, values)
+          | Some(oldDir) ->
+            debug(("Comparing"));
+            oldValues = oldDir.getArrayRaw(key);
+            if (oldValues.size() != values.size()) {
+              debug(("Different sizes"));
+              writer.setArray(key, values);
+              return void;
+            };
+            for (i in Range(0, values.size())) {
+              if (
+                ocamlCompareValues(
+                  File::type(oldValues[i]).root,
+                  File::type(values[i]).root,
+                ) != 0
+              ) {
+                debug(("Different values", i));
+                writer.setArray(key, values);
+                return void;
+              }
+            };
+            debug(("Same values"));
+            writer.setArray(key, unsafeCastFiles(oldValues))
+          }
+        },
+      );
     0
   | Some _ -> 1
   }
