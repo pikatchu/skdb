@@ -426,6 +426,16 @@ mutable class Context{
     this.!sessions = this.sessions.remove(sessionId)
   }
 
+  fun unsafeForceReset(): this {
+    this with {
+      tick => this.tick.next(),
+      dirty => List[],
+      dirtyReaders => List[],
+      toUpdate => SortedMap[],
+      toReset => SortedSet[],
+    }
+  }
+
   readonly fun clone(): this {
     static{
       toPurge => this.toPurge,

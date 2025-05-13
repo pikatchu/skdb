@@ -303,6 +303,7 @@ fun map(
 
 @export("SKIP_ocamlSync")
 fun sync(context: SKStore.Context, newContext: SKStore.Context): void {
+  !newContext = newContext.unsafeForceReset();
   !context = SKStore.gContextSync(
     context.tick,
     context,
