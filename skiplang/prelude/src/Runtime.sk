@@ -179,9 +179,6 @@ fun delayedMap(
         if (isSaveReadsMode() != 0) {
           reads = getDelayedReads(targetDirName.toString(), key.value);
           for (read in reads) {
-            debug(
-              ("Saving read for", targetDirName.toString(), key.value, read),
-            );
             context.addDep(read);
           };
           writer.setArray(key, valueIter.toArray());
