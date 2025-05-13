@@ -119,8 +119,47 @@ fun unsafeGetArray(
   })
 }
 
+@export("SKIP_ocamlGetArray")
+fun getArray(
+  context: mutable SKStore.Context,
+  dirName: SKStore.DirName,
+  key: String,
+): Array<File> {
+  SKStore.EHandle(Key::keyType, File::type, dirName).getArray(context, Key(key))
+}
+
 @cpp_extern("SKIP_saveDelayedCall")
 native fun saveDelayedCall(dirName: String, key: String): void;
+
+@cpp_extern("SKIP_getDelayedCall")
+native fun getDelayedCall(dirName: String, key: String): Array<KeyFiles>;
+
+@cpp_extern("SKIP_searchDelayedCall")
+native fun searchDelayedCall(dirName: String, key: String): Int;
+
+@cpp_extern("SKIP_getDelayedReads")
+native fun getDelayedReads(dirName: String, key: String): Array<SKStore.Path>;
+
+@cpp_extern("sk_is_save_reads_mode")
+native fun isSaveReadsMode(): Int;
+
+@export("SKIP_ocamlAddDirty")
+fun addDirty(
+  context: mutable SKStore.Context,
+  parentName: SKStore.DirName,
+  childName: SKStore.DirName,
+  key: String,
+): void {
+  path = SKStore.Path::create(parentName, Key(key));
+  context.!dirty = List.Cons(path, context.dirty);
+  parentDir = context.unsafeGetEagerDir(parentName);
+  childDir = context.unsafeGetEagerDir(childName);
+  context.addToUpdate(
+    childDir.timeStack,
+    parentDir.time,
+    SKStore.Arrow(parentName, childName),
+  )
+}
 
 @export("SKIP_ocamlDelayedMap")
 fun delayedMap(
@@ -136,8 +175,38 @@ fun delayedMap(
       File::type,
       context,
       targetDirName,
-      (_context, writer, key, valueIter) ~> {
-        debug(("PMAP", targetDirName.toString(), key));
+      (context, writer, key, valueIter) ~> {
+        if (isSaveReadsMode() != 0) {
+          reads = getDelayedReads(targetDirName.toString(), key.value);
+          for (read in reads) {
+            debug(
+              ("Saving read for", targetDirName.toString(), key.value, read),
+            );
+            context.addDep(read);
+          };
+          writer.setArray(key, valueIter.toArray());
+          return void;
+        };
+        // WARNING: The following call to `saveDelayedCall` is
+        // **extremely unsafe** and must be modified with great
+        // caution. This function saves the passed
+        // `targetDirName.toString()` and `key.value` outside of
+        // the SKIP heap and obstack. It is critical that both
+        // arguments point to objects that were allocated long
+        // before this function was invoked, and that are
+        // guaranteed to remain valid independently of the current
+        // obstack state.
+        //
+        // If an object allocated in the current obstack were to be
+        // passed here, it could be freed or moved by the garbage
+        // collector without `saveDelayedCall` being aware, leading
+        // to dangerous dangling pointers and potential memory
+        // corruption.
+        //
+        // Any changes to this code must be reviewed with a deep
+        // understanding of SKIP memory management and object
+        // lifetimes.
+
         saveDelayedCall(targetDirName.toString(), key.value);
         writer.setArray(key, valueIter.toArray())
       },
@@ -158,12 +227,6 @@ fun setArrayFile(array: mutable Array<File>, idx: Int, file: File): void {
 }
 
 class KeyFiles(key: Key, files: Array<File>) extends SKStore.File
-
-@cpp_extern("SKIP_getDelayedCall")
-native fun getDelayedCall(dirName: String, key: String): Array<KeyFiles>;
-
-@cpp_extern("SKIP_getDelayedReads")
-native fun getDelayedReads(dirName: String, key: String): Array<SKStore.Path>;
 
 @export("SKIP_ocamlCreateKeyFiles")
 fun createKeyFiles(key: String, files: Array<File>): KeyFiles {
@@ -209,26 +272,6 @@ fun setArrayKeyFiles(
   array![idx] = file;
 }
 
-@export("SKIP_ocamlDebugArrayKeyFiles")
-fun debugArrayKeyFiles(arr: Array<KeyFiles>): void {
-  debug(arr);
-}
-
-@export("SKIP_ocamlDebugKeyFiles")
-fun debugKeyFiles(v: KeyFiles): void {
-  debug(v);
-}
-
-@export("SKIP_ocamlDebugArrayFiles")
-fun debugFiles(v: Array<File>): void {
-  debug(v);
-}
-
-@export("SKIP_ocamlDebugFile")
-fun debugFile(v: File): void {
-  debug(v);
-}
-
 @cpp_extern("SKIP_ocamlCompareValues")
 native fun ocamlCompareValues(v1: OCamlRoot, v2: OCamlRoot): Int;
 
@@ -251,12 +294,8 @@ fun map(
         File::type,
         context,
         targetDirName,
-        (context, writer, key, _valueIter) ~> {
+        (_context, writer, key, _valueIter) ~> {
           delayedCall = getDelayedCall(parentDirName.toString(), key.value);
-          reads = getDelayedReads(parentDirName.toString(), key.value);
-          for (read in reads) {
-            context.addDep(read);
-          };
           for (kv in delayedCall) {
             writer.setArray(kv.key, kv.files)
           }
@@ -272,10 +311,8 @@ fun map(
           context.unsafeMaybeGetEagerDir(dedupDirName) match {
           | None() -> writer.setArray(key, values)
           | Some(oldDir) ->
-            debug(("Comparing"));
             oldValues = oldDir.getArrayRaw(key);
             if (oldValues.size() != values.size()) {
-              debug(("Different sizes"));
               writer.setArray(key, values);
               return void;
             };
@@ -286,12 +323,10 @@ fun map(
                   File::type(values[i]).root,
                 ) != 0
               ) {
-                debug(("Different values", i));
                 writer.setArray(key, values);
                 return void;
               }
             };
-            debug(("Same values"));
             writer.setArray(key, unsafeCastFiles(oldValues))
           }
         },
@@ -318,6 +353,33 @@ fun sync(context: SKStore.Context, newContext: SKStore.Context): void {
 @export("SKIP_ocamlUpdate")
 fun update(context: mutable SKStore.Context, dirName: String): void {
   context.updateDir(dirName);
+}
+
+@export("SKIP_ocamlUnion")
+fun union(
+  context: mutable SKStore.Context,
+  dirName1: SKStore.DirName,
+  dirName2: SKStore.DirName,
+  targetName: SKStore.DirName,
+): Int {
+  context.unsafeMaybeGetEagerDir(targetName) match {
+  | None() ->
+    f = (_context, writer, key, valueIter) ~> {
+      writer.setArray(key, valueIter.toArray());
+    };
+    _ = SKStore.EHandle::multiMap(
+      Key::keyType,
+      File::type,
+      context,
+      Array[
+        (SKStore.EHandle(Key::keyType, File::type, dirName1), (f, None())),
+        (SKStore.EHandle(Key::keyType, File::type, dirName2), (f, None())),
+      ],
+      targetName,
+    );
+    0
+  | Some _ -> 1
+  }
 }
 
 module end;

@@ -268,41 +268,13 @@ delayedCall_t* sk_getDelayedCalls() {
 
 extern int64_t SKIP_ocamlArrayFileSize(void*);
 
-
-static int mapping_mode = 0;
-
-void sk_mapping_mode_on() {
-  printf("Mapping mode: ON\n");
-  mapping_mode = 1;
-}
-
-void sk_mapping_mode_off() {
-  printf("Mapping mode: OFF\n");
-  mapping_mode = 0;
-}
-
-SkipInt SKIP_isMappingMode() {
-  return (SkipInt)mapping_mode;
-}
-
 void SKIP_saveDelayedCall(char* dirName, char* key) {
-  if(mapping_mode) {
-    return;
-  }
-
   delayedCall_t call;
 
-  uint32_t size = SKIP_String_byteSize(dirName);
-  call.dirName = sk_malloc(size + 1);
-  memcpy(call.dirName, dirName, size);
-  call.dirName[size] = 0;
-
-  size = SKIP_String_byteSize(key);
-  call.key = sk_malloc(size + 1);
-  memcpy(call.key, key, size);
-  call.key[size] = 0;
-
+  call.dirName = dirName;
+  call.key = key;
   call.result = NULL;
+
   sk_addDelayedCall(call);
 }
 
@@ -330,6 +302,10 @@ static long binarySearchDelayedCalls(
   }
 
   return -1;  // Not found
+}
+
+SkipInt SKIP_searchDelayedCall(char*, char* key) {
+  return binarySearchDelayedCalls(delayedCallsSortedSize, key);
 }
 
 void* SKIP_getDelayedCall(char* dirName, char* key) {
@@ -363,4 +339,18 @@ void* SKIP_getDelayedReads(char* dirName, char* key) {
 
 void* SKIP_ocamlUnsafeCastFiles(void* obj) {
   return obj;
+}
+
+static SkipInt save_reads_mode = 0;
+
+SkipInt sk_is_save_reads_mode() {
+  return save_reads_mode;
+}
+
+void sk_save_reads_mode_on() {
+  save_reads_mode = 1;
+}
+
+void sk_save_reads_mode_off() {
+  save_reads_mode = 0;
 }
