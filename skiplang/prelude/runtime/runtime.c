@@ -173,20 +173,24 @@ typedef struct {
 
 // Dynamic array for delayed calls
 static delayedCall_t* delayedCalls = NULL;
-static delayedCall_t* delayedCallsFinished;
-static size_t delayedCallsFinishedCount = 0;
 static size_t delayedCallsCount = 0;
 static size_t delayedCallsSortedSize = 0;
 static size_t delayedCallsCapacity = 0;
 
-#define INITIAL_CAPACITY 16
+#define INITIAL_CAPACITY 32
+
+void sk_free_delayedCalls() {
+  if (delayedCalls != NULL) {
+    sk_pfree_size(delayedCalls, delayedCallsCapacity * sizeof(delayedCall_t));
+  }
+}
 
 // Ensure capacity for at least `minCapacity` elements
 static void sk_ensureCapacity(size_t minCapacity) {
+
   if (delayedCallsCapacity >= minCapacity) {
     return;
   }
-
   size_t newCapacity = 0;
   if (delayedCallsCapacity == 0) {
     newCapacity = INITIAL_CAPACITY;
@@ -200,18 +204,13 @@ static void sk_ensureCapacity(size_t minCapacity) {
 
   sk_global_lock();
   delayedCall_t* newArray = sk_palloc(newCapacity * sizeof(delayedCall_t));
-  delayedCall_t* finishedNewArray = sk_palloc(newCapacity * sizeof(delayedCall_t));
   if (delayedCalls != NULL) {
     memcpy(newArray, delayedCalls, delayedCallsCount * sizeof(delayedCall_t));
-    sk_pfree_size(delayedCalls, delayedCallsCapacity * sizeof(delayedCall_t));
-
-    memcpy(finishedNewArray, delayedCallsFinished, delayedCallsCount * sizeof(delayedCall_t));
-    sk_pfree_size(delayedCallsFinished, delayedCallsCapacity * sizeof(delayedCall_t));
+    sk_free_delayedCalls();
   }
   sk_global_unlock();
 
   delayedCalls = newArray;
-  delayedCallsFinished = finishedNewArray;
   delayedCallsCapacity = newCapacity;
 }
 
@@ -220,14 +219,6 @@ void sk_addDelayedCall(delayedCall_t call) {
   sk_ensureCapacity(delayedCallsCount + 1);
   delayedCalls[delayedCallsCount] = call;
   delayedCallsCount++;
-}
-
-void sk_finishDelayedCall(size_t index) {
-  delayedCallsFinished[delayedCallsFinishedCount] = delayedCalls[index];
-  delayedCallsFinishedCount++;
-
-  delayedCallsCount--;
-  delayedCalls[index] = delayedCalls[delayedCallsCount];
 }
 
 size_t sk_getDelayedCallsCount() {

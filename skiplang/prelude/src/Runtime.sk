@@ -33,7 +33,9 @@ fun createContext(): SKStore.Context {
   if (SKStore.gHasContext() == 0) {
     SKStore.gContextInit(SKStore.Context{});
   };
-  SKStore.gUnsafeContextGet()
+  result = SKStore.gUnsafeContextGet();
+  debug(("Context created", result.dirty.size()));
+  result
 }
 
 @export("SKIP_ocamlMCloneContext")
@@ -311,6 +313,7 @@ fun map(
             oldValues = oldDir.getArrayRaw(key);
             if (oldValues.size() != values.size()) {
               writer.setArray(key, values);
+              debug("Different1");
               return void;
             };
             for (i in Range(0, values.size())) {
@@ -321,6 +324,7 @@ fun map(
                 ) != 0
               ) {
                 writer.setArray(key, values);
+                debug("Different2");
                 return void;
               }
             };
@@ -328,6 +332,14 @@ fun map(
           }
         },
       );
+    debug(
+      (
+        "Creating",
+        targetDirName.toString(),
+        context.unsafeMaybeGetEagerDir(targetDirName) is Some _,
+      ),
+    );
+    debug(("Creating", dedupDirName.toString()));
     0
   | Some _ -> 1
   }
@@ -377,6 +389,62 @@ fun union(
     0
   | Some _ -> 1
   }
+}
+
+const inputFilesDirName: SKStore.DirName = SKStore.DirName::create("/files/");
+
+class MTime(mtime: Int) extends SKStore.File
+
+fun getInputFiles(
+  context: mutable SKStore.Context,
+): SKStore.EHandle<SKStore.SID, MTime> {
+  context.unsafeMaybeGetEagerDir(inputFilesDirName) match {
+  | None() ->
+    context.mkdir(SKStore.SID::keyType, MTime::type, inputFilesDirName, Array[])
+  | Some _ ->
+    SKStore.EHandle(SKStore.SID::keyType, MTime::type, inputFilesDirName)
+  }
+}
+
+@export("SKIP_ocamlSetFile")
+fun setFile(
+  context: mutable SKStore.Context,
+  fileName: String,
+  mtime: Int,
+): Int {
+  key = SKStore.SID(fileName);
+  handle = getInputFiles(context);
+  arr = handle.unsafeGetArray(context, key);
+  if (arr.size() == 0 || arr[0].mtime != mtime) {
+    handle.writeArray(context, key, Array[MTime(mtime)]);
+    1
+  } else {
+    0
+  }
+}
+
+@export("SKIP_ocamlRemoveFile")
+fun removeFile(context: mutable SKStore.Context, fileName: String): void {
+  getInputFiles(context).writeArray(context, SKStore.SID(fileName), Array[])
+}
+
+@export("SKIP_ocamlArrayStringSize")
+fun getArrayStringSize(arr: Array<String>): Int {
+  arr.size()
+}
+
+@export("SKIP_ocamlGetFiles")
+fun getFiles(context: mutable SKStore.Context): Array<String> {
+  result = mutable Vector[];
+  _ = getInputFiles(context);
+  context.unsafeGetEagerDir(inputFilesDirName).unsafeGetFileIter().each(kv -> {
+    (key, valueIter) = kv;
+    valueIter.next() match {
+    | None() -> void
+    | Some _ -> result.push(SKStore.SID::keyType(key).value)
+    }
+  });
+  result.toArray()
 }
 
 module end;

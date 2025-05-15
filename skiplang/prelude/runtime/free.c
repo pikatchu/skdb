@@ -108,7 +108,7 @@ void sk_free_root(char* obj) {
     sk_value_t delayed = sk_stack_pop(st);
     void* toFree = delayed.value;
 
-    if (sk_is_static(toFree)) {
+    if (!sk_is_in_heap(toFree)) {
       continue;
     }
 
@@ -149,7 +149,7 @@ void sk_free_external_pointers() {
     sk_value_t delayed = sk_stack_pop(st);
     void* toFree = delayed.value;
 
-    if (sk_is_static(toFree)) {
+    if (!sk_is_in_heap(toFree)) {
       continue;
     }
 

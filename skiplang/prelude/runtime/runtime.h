@@ -353,12 +353,13 @@ void* sk_get_ftable(sk_size_info_t);
 void sk_add_ftable(void* ptr, size_t size);
 void* sk_get_ftable(size_t size);
 #endif
+int sk_has_global_lock();
 void sk_global_lock();
 void sk_global_unlock();
 void sk_incr_ref_count(void*);
 int sk_is_const(void*);
 int sk_is_large_page(sk_obstack_t* page);
-int sk_is_static(void*);
+int sk_is_in_heap(void*);
 void* sk_malloc(size_t size);
 char* sk_new_const(char* cst);
 void sk_obstack_attach_page(sk_obstack_t* lpage, sk_obstack_t* next);

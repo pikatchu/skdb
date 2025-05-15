@@ -79,6 +79,10 @@ pthread_mutex_t* gmutex = (void*)1234;
 // This is only used for debugging purposes
 int sk_is_locked = 0;
 
+int sk_has_global_lock() {
+  return sk_is_locked;
+}
+
 void sk_check_has_lock() {
   if ((ginfo->fileName != NULL) && !sk_is_locked) {
     fprintf(stderr, "INTERNAL ERROR: unsafe operation\n");
@@ -579,8 +583,8 @@ void sk_load_mapping(char* fileName) {
 
 int obstack_intervals_contains(void*);
 
-int sk_is_static(void* ptr) {
-  return !((char*)ginfo <= (char*)ptr && (char*)ptr < ginfo->end);
+int sk_is_in_heap(void* ptr) {
+  return ((char*)ginfo <= (char*)ptr && (char*)ptr < ginfo->end);
 }
 
 /*****************************************************************************/

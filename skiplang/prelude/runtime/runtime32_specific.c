@@ -59,8 +59,8 @@ void SKIP_skstore_end_of_init() {
   }
 }
 
-int sk_is_static(void* ptr) {
-  return (char*)ptr < end_of_static;
+int sk_is_in_heap(void* ptr) {
+  return (char*)ptr >= end_of_static;
 }
 
 void sk_staging() {}

@@ -104,6 +104,7 @@ uintptr_t sk_get_ref_count(void* obj) {
   return *count;
 }
 
+
 static char* SKIP_intern_obj(sk_stack_t* st, char* obj) {
   SKIP_gc_type_t* ty = get_gc_type(obj);
 
@@ -173,7 +174,7 @@ void* SKIP_intern_shared(void* obj) {
     size_t obstack_idx = sk_get_obstack_idx(toCopy, pages, nbr_pages);
 
     if (obstack_idx >= nbr_pages) {
-      if (!sk_is_static(toCopy)) {
+      if (sk_is_in_heap(toCopy)) { 
         sk_incr_ref_count(toCopy);
       }
 
