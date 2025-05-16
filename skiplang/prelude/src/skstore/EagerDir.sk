@@ -2039,7 +2039,7 @@ class EagerDir protected {
     this.fixedOld.items().each(e -> e.i1.getNewDirs().each(context.removeDir))
   }
 
-  private fun getOld(key: Path): MInfo {
+  fun getOld(key: Path): MInfo {
     if (this.old.containsKey(key)) {
       this.old[key]
     } else {

@@ -26,7 +26,10 @@ fun createIntArray(size: Int): mutable Array<Int> {
 module OCaml;
 
 value class Memory(Array<UInt32>)
-value class OCamlRoot(Int)
+
+const emptyMemory: Memory = Memory(Array[]);
+
+value class OCamlRoot(value: Int)
 
 @export("SKIP_ocamlCreateContext")
 fun createContext(): SKStore.Context {
@@ -57,7 +60,11 @@ fun replaceContext(
 }
 
 class Key(value: String) extends SKStore.Key
-class File(mem: Memory, root: OCamlRoot) extends SKStore.File
+class File(mem: Memory, root: OCamlRoot) extends SKStore.File {
+  static fun fromInt(n: Int): File {
+    static(emptyMemory, OCamlRoot(n.shl(1).or(1)))
+  }
+}
 
 @export("SKIP_ocamlGetDummyFile")
 fun getDummyFile(): File {
@@ -90,16 +97,15 @@ fun createInputDir(
   }
 }
 
+const zero: Array<File> = Array[File(Memory(Array[]), OCamlRoot(1))];
+
 @export("SKIP_ocamlWrite")
 fun write(
   context: mutable SKStore.Context,
   dirName: SKStore.DirName,
   key: String,
-  value: File,
 ): void {
-  context
-    .unsafeGetEagerDir(dirName)
-    .writeArray(context, Key(key), Array[value]);
+  context.unsafeGetEagerDir(dirName).writeArray(context, Key(key), zero);
 }
 
 @export("SKIP_ocamlArrayFileSize")
@@ -186,6 +192,20 @@ fun delayedMap(
           writer.setArray(key, valueIter.toArray());
           return void;
         };
+
+        // Get the reads of last time around (if any) so that they are
+        // removed to be added again in the next phase
+
+        oldReads = context.unsafeMaybeGetEagerDir(targetDirName) match {
+        | None() -> Array[]
+        | Some(dir) ->
+          dir.getOld(SKStore.Path::create(parentDirName, key)).getReads()
+        };
+
+        for (read in oldReads) {
+          context.addDep(read);
+        };
+
         // WARNING: The following call to `saveDelayedCall` is
         // **extremely unsafe** and must be modified with great
         // caution. This function saves the passed
@@ -393,39 +413,32 @@ fun union(
 
 const inputFilesDirName: SKStore.DirName = SKStore.DirName::create("/files/");
 
-class MTime(mtime: Int) extends SKStore.File
-
-fun getInputFiles(
-  context: mutable SKStore.Context,
-): SKStore.EHandle<SKStore.SID, MTime> {
-  context.unsafeMaybeGetEagerDir(inputFilesDirName) match {
-  | None() ->
-    context.mkdir(SKStore.SID::keyType, MTime::type, inputFilesDirName, Array[])
-  | Some _ ->
-    SKStore.EHandle(SKStore.SID::keyType, MTime::type, inputFilesDirName)
-  }
-}
-
 @export("SKIP_ocamlSetFile")
 fun setFile(
   context: mutable SKStore.Context,
+  dirName: SKStore.DirName,
   fileName: String,
   mtime: Int,
-): Int {
-  key = SKStore.SID(fileName);
-  handle = getInputFiles(context);
+): void {
+  key = Key(fileName);
+  handle = SKStore.EHandle(Key::keyType, File::type, dirName);
   arr = handle.unsafeGetArray(context, key);
-  if (arr.size() == 0 || arr[0].mtime != mtime) {
-    handle.writeArray(context, key, Array[MTime(mtime)]);
-    1
-  } else {
-    0
+  if (arr.size() == 0 || arr[0].root.value.shr(1) != mtime) {
+    handle.writeArray(context, key, Array[File::fromInt(mtime)]);
   }
 }
 
 @export("SKIP_ocamlRemoveFile")
-fun removeFile(context: mutable SKStore.Context, fileName: String): void {
-  getInputFiles(context).writeArray(context, SKStore.SID(fileName), Array[])
+fun removeFile(
+  context: mutable SKStore.Context,
+  dirName: SKStore.DirName,
+  fileName: String,
+): void {
+  SKStore.EHandle(Key::keyType, File::type, dirName).writeArray(
+    context,
+    Key(fileName),
+    Array[],
+  )
 }
 
 @export("SKIP_ocamlArrayStringSize")
@@ -434,10 +447,12 @@ fun getArrayStringSize(arr: Array<String>): Int {
 }
 
 @export("SKIP_ocamlGetFiles")
-fun getFiles(context: mutable SKStore.Context): Array<String> {
+fun getFiles(
+  context: mutable SKStore.Context,
+  dirName: SKStore.DirName,
+): Array<String> {
   result = mutable Vector[];
-  _ = getInputFiles(context);
-  context.unsafeGetEagerDir(inputFilesDirName).unsafeGetFileIter().each(kv -> {
+  context.unsafeGetEagerDir(dirName).unsafeGetFileIter().each(kv -> {
     (key, valueIter) = kv;
     valueIter.next() match {
     | None() -> void
