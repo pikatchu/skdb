@@ -345,3 +345,13 @@ void sk_save_reads_mode_on() {
 void sk_save_reads_mode_off() {
   save_reads_mode = 0;
 }
+
+static SkipInt is_skip_init = 0;
+
+void sk_skip_set_init_mode() {
+  is_skip_init = 1;
+}
+
+SkipInt SKIP_isSkipInit() {
+  return is_skip_init;
+}

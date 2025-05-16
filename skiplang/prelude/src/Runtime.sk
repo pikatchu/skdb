@@ -18,17 +18,31 @@ fun createUInt32Array(size: UInt32): mutable Array<UInt32> {
   Array<UInt32>::mfill(size.toInt(), UInt32::truncate(0));
 }
 
-@export("SKIP_createIntArray")
+module OCaml;
+
+@export("SKIP_ocamlCreateIntArray")
 fun createIntArray(size: Int): mutable Array<Int> {
   Array<Int>::mfill(size, 0);
 }
 
-@export("SKIP_setIntArray")
+@export("SKIP_ocamlSetIntArray")
 fun setIntArray(array: mutable Array<Int>, index: Int, value: Int): void {
   array![index] = value
 }
 
-module OCaml;
+@export("SKIP_ocamlCreateStringArray")
+fun createStringArray(size: Int): mutable Array<String> {
+  Array<String>::mfill(size, "");
+}
+
+@export("SKIP_ocamlSetStringArray")
+fun setStringArray(
+  array: mutable Array<String>,
+  index: Int,
+  value: String,
+): void {
+  array![index] = value
+}
 
 value class Memory(Array<UInt32>)
 
@@ -91,15 +105,27 @@ fun createDirName(str: String): SKStore.DirName {
   SKStore.DirName::create(str)
 }
 
+@export("SKIP_ocamlExistsInputDir")
+fun existsInputDir(
+  context: mutable SKStore.Context,
+  dirName: SKStore.DirName,
+): Int {
+  if (context.unsafeMaybeGetEagerDir(dirName) is None()) 0 else 1
+}
+
 @export("SKIP_ocamlCreateInputDir")
 fun createInputDir(
   context: mutable SKStore.Context,
   dirName: SKStore.DirName,
+  keys: Array<String>,
+  values: Array<Int>,
 ): void {
-  context.unsafeMaybeGetEagerDir(dirName) match {
-  | None() -> _ = context.mkdir(Key::keyType, File::type, dirName)
-  | Some _ -> void
-  }
+  _ = context.mkdir(
+    Key::keyType,
+    File::type,
+    dirName,
+    keys.mapWithIndex((i, k) -> (Key(k), File::fromInt(values[i]))),
+  )
 }
 
 const zero: Array<File> = Array[File(Memory(Array[]), OCamlRoot(1))];
@@ -302,6 +328,9 @@ native fun ocamlCompareValues(v1: OCamlRoot, v2: OCamlRoot): Int;
 @cpp_extern("SKIP_ocamlUnsafeCastFiles")
 native fun unsafeCastFiles(v: Array<SKStore.File>): Array<File>;
 
+@cpp_extern("SKIP_isSkipInit")
+native fun isSkipInit(): Int;
+
 @export("SKIP_ocamlMap")
 fun map(
   context: mutable SKStore.Context,
@@ -332,6 +361,7 @@ fun map(
         dedupDirName,
         (context, writer, key, valueIter) ~> {
           values = valueIter.toArray();
+          if (isSkipInit() != 0) return writer.setArray(key, values);
           context.unsafeMaybeGetEagerDir(dedupDirName) match {
           | None() -> writer.setArray(key, values)
           | Some(oldDir) ->
@@ -461,7 +491,7 @@ fun getFiles(
     (key, valueIter) = kv;
     valueIter.next() match {
     | None() -> void
-    | Some _ -> result.push(SKStore.SID::keyType(key).value)
+    | Some _ -> result.push(Key::keyType(key).value)
     }
   });
   result.toArray()
