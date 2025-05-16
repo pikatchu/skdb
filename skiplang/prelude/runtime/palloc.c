@@ -458,7 +458,7 @@ struct file_mapping {
 /* Creates a new file mapping. */
 /*****************************************************************************/
 
-void sk_create_mapping(char* fileName, size_t icapacity) {
+void sk_create_mapping(char* fileName, size_t icapacity, int show) {
   if (fileName != NULL && access(fileName, F_OK) == 0) {
     fprintf(stderr, "ERROR: File %s already exists!\n", fileName);
     exit(ERROR_MAPPING_EXISTS);
@@ -522,7 +522,7 @@ void sk_create_mapping(char* fileName, size_t icapacity) {
   ginfo->fileName = (fileName != NULL) ? persistent_fileName : NULL;
   ginfo->context = NULL;
   *gid = 1;
-  if (icapacity != DEFAULT_CAPACITY) {
+  if (show && icapacity != DEFAULT_CAPACITY) {
     printf("CAPACITY SET TO: %ld\n", icapacity);
   }
   *capacity = icapacity;
@@ -693,7 +693,7 @@ void SKIP_memory_init(int argc, char** argv) {
   if (is_create || fileName == NULL) {
     size_t capacity = DEFAULT_CAPACITY;
     capacity = parse_capacity(argc, argv);
-    sk_create_mapping(fileName, capacity);
+    sk_create_mapping(fileName, capacity, 1);
   } else {
     sk_load_mapping(fileName);
   }
