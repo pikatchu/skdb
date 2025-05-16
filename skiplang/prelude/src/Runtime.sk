@@ -55,9 +55,7 @@ fun createContext(): SKStore.Context {
   if (SKStore.gHasContext() == 0) {
     SKStore.gContextInit(SKStore.Context{});
   };
-  result = SKStore.gUnsafeContextGet();
-  debug(("Context created", result.dirty.size()));
-  result
+  SKStore.gUnsafeContextGet()
 }
 
 @export("SKIP_ocamlMCloneContext")
@@ -368,7 +366,6 @@ fun map(
             oldValues = oldDir.getArrayRaw(key);
             if (oldValues.size() != values.size()) {
               writer.setArray(key, values);
-              debug("Different1");
               return void;
             };
             for (i in Range(0, values.size())) {
@@ -379,7 +376,6 @@ fun map(
                 ) != 0
               ) {
                 writer.setArray(key, values);
-                debug("Different2");
                 return void;
               }
             };
@@ -387,14 +383,6 @@ fun map(
           }
         },
       );
-    debug(
-      (
-        "Creating",
-        targetDirName.toString(),
-        context.unsafeMaybeGetEagerDir(targetDirName) is Some _,
-      ),
-    );
-    debug(("Creating", dedupDirName.toString()));
     0
   | Some _ -> 1
   }
