@@ -23,6 +23,11 @@ fun createIntArray(size: Int): mutable Array<Int> {
   Array<Int>::mfill(size, 0);
 }
 
+@export("SKIP_setIntArray")
+fun setIntArray(array: mutable Array<Int>, index: Int, value: Int): void {
+  array![index] = value
+}
+
 module OCaml;
 
 value class Memory(Array<UInt32>)
