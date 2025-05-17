@@ -185,6 +185,10 @@ void sk_free_delayedCalls() {
   }
 }
 
+void sk_reset_delayedCalls() {
+  delayedCallsCount = 0;
+}
+
 // Ensure capacity for at least `minCapacity` elements
 static void sk_ensureCapacity(size_t minCapacity) {
 
