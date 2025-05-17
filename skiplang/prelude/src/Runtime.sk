@@ -519,25 +519,28 @@ fun getFiles(
   });
   result.toArray()
 }
-/*
+
+const funsDirName: SKStore.DirName = SKStore.DirName::create("/funs/");
+
 @export("SKIP_ocamlSaveFun")
 fun saveFun(
   context: mutable SKStore.Context,
   mapName: String,
   file: File,
-): void {
+): Int {
   funs = context.unsafeMaybeGetEagerDir(funsDirName) match {
   | None() -> context.mkdir(Key::keyType, File::type, funsDirName, Array[])
   | Some _ -> SKStore.EHandle(Key::keyType, File::type, funsDirName)
   };
   key = Key(mapName);
   arr = funs.unsafeGetArray(context, key);
-  if(arr.size() == 0) {
+  if (arr.size() == 0) {
     funs.writeArray(context, key, Array[file]);
+    0
   } else {
+    oldFun = arr[0];
+    ocamlCompareValues(oldFun.root, file.root)
   }
 }
-*/
-
 
 module end;
