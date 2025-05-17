@@ -404,6 +404,22 @@ fun sync(
   context
 }
 
+@export("SKIP_ocamlClearDirty")
+fun clearDirty(
+  context: mutable SKStore.Context,
+  parentDirName: SKStore.DirName,
+  preparedDirName: SKStore.DirName,
+  targetDirName: SKStore.DirName,
+  dedupDirName: SKStore.DirName,
+): void {
+  context.!dirty = context.dirty.filter(x ->
+    x.dirName != parentDirName &&
+      x.dirName != preparedDirName &&
+      x.dirName != targetDirName &&
+      x.dirName != dedupDirName
+  );
+}
+
 @export("SKIP_ocamlFreeRootContext")
 fun freeRootContext(
   context: SKStore.Context,
