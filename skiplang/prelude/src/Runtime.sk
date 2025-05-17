@@ -393,7 +393,6 @@ fun sync(
   context: SKStore.Context,
   newContext: SKStore.Context,
 ): SKStore.Context {
-  !newContext = newContext.unsafeForceReset();
   !context = SKStore.gContextSync(
     context.tick,
     context,
@@ -406,7 +405,19 @@ fun sync(
 }
 
 @export("SKIP_ocamlFreeRootContext")
-fun freeRootContext(context: SKStore.Context): void {
+fun freeRootContext(
+  context: SKStore.Context,
+  newContext: SKStore.Context,
+): void {
+  !newContext = newContext.unsafeForceReset();
+  !context = SKStore.gContextSync(
+    context.tick,
+    context,
+    newContext,
+    None(),
+    UInt32::truncate(0),
+    None(),
+  );
   SKStore.gUnsafeFree(context);
 }
 
