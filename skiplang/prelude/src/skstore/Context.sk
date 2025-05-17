@@ -805,6 +805,8 @@ mutable class Context{
   mutable fun updateDir(dirNameStr: String): void {
     _ = this.timeStamp();
 
+    dirName = DirName::create(dirNameStr);
+
     dirty = mutable Map<DirName, SortedSet<Key>>[];
     dirtyReaders = mutable Map<DirName, mutable Map<DirName, SortedSet<Key>>>[];
 
@@ -816,6 +818,7 @@ mutable class Context{
       | Some(set) -> dirty![path.dirName] = set.set(path.baseName)
       };
     };
+    this.!dirty = this.dirty.filter(x -> x.dirName != dirName);
     for (reader in this.dirtyReaders) {
       if (!dirtyReaders.containsKey(reader.parentName)) {
         dirtyReaders![reader.parentName] = mutable Map[];
